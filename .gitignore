@@ -40,6 +40,9 @@
 # debug information files
 *.dwo
 
-
 # Visual studio files
 .vs/*
+*.idb
+*.tlog
+*.log
+*.recipe
