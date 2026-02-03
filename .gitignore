@@ -46,3 +46,6 @@
 *.tlog
 *.log
 *.recipe
+
+# Shader files
+*.spv
