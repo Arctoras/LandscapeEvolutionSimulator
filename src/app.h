@@ -1,5 +1,6 @@
 #pragma once
 
+#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
 #define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 #include <vulkan/vulkan_raii.hpp>
 
@@ -31,7 +32,7 @@ private:
     void createGraphicsPipeline();
 
     void createCommandPool();
-    void createCommandBuffer();
+    void createCommandBuffers();
 
     void recordCommandBuffer(uint32_t imageIndex);
     void transitionImageLayout(uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask);
@@ -40,8 +41,14 @@ private:
 
     void drawFrame();
 
+    void cleanupSwapChain();
+    void recreateSwapChain();
+
+    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+
     void mainLoop();
     void cleanup();
+
 
     void setupDebugMessenger();
     static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
@@ -52,32 +59,38 @@ private:
 
 private:
     GLFWwindow* window = nullptr;
-    vk::raii::Context                context;
-    vk::raii::Instance               instance = nullptr;
-    vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
 
-    vk::raii::SurfaceKHR             surface = nullptr;
+    vk::raii::Context                    context;
+    vk::raii::Instance                   instance = nullptr;
+    vk::raii::DebugUtilsMessengerEXT     debugMessenger = nullptr;
 
-    vk::raii::PhysicalDevice         physicalDevice = nullptr;
-    vk::raii::Device                 device = nullptr;
+    vk::raii::SurfaceKHR                 surface = nullptr;
 
-    uint32_t                         queueIndex = ~0;
-    vk::raii::Queue                  queue = nullptr;
-    vk::raii::SwapchainKHR           swapChain = nullptr;
-    std::vector<vk::Image>           swapChainImages;
-    vk::SurfaceFormatKHR             swapChainSurfaceFormat;
-    vk::Extent2D                     swapChainExtent;
-    std::vector<vk::raii::ImageView> swapChainImageViews;
+    vk::raii::PhysicalDevice             physicalDevice = nullptr;
+    vk::raii::Device                     device = nullptr;
 
-    vk::raii::PipelineLayout         pipelineLayout = nullptr;
-    vk::raii::Pipeline		         graphicsPipeline = nullptr;
+    uint32_t                             queueIndex = ~0;
+    vk::raii::Queue                      queue = nullptr;
+    vk::raii::SwapchainKHR               swapChain = nullptr;
+    std::vector<vk::Image>               swapChainImages;
+    vk::SurfaceFormatKHR                 swapChainSurfaceFormat;
+    vk::Extent2D                         swapChainExtent;
+    std::vector<vk::raii::ImageView>     swapChainImageViews;
 
-    vk::raii::CommandPool            commandPool = nullptr;
-    vk::raii::CommandBuffer          commandBuffer = nullptr;
+    vk::raii::PipelineLayout             pipelineLayout = nullptr;
+    vk::raii::Pipeline		             graphicsPipeline = nullptr;
 
-    vk::raii::Semaphore              presentCompleteSemaphore = nullptr;
-    vk::raii::Semaphore              renderFinishedSemaphore = nullptr;
-    vk::raii::Fence                  drawFence = nullptr;
+    vk::raii::CommandPool                commandPool = nullptr;
+    std::vector<vk::raii::CommandBuffer> commandBuffers;
+    
+    std::vector<vk::raii::Semaphore>     presentCompleteSemaphores;
+    std::vector<vk::raii::Semaphore>     renderFinishedSemaphores;
+    std::vector<vk::raii::Fence>         inFlightFences;
+
+    uint32_t                             semaphoreIndex = 0;
+    uint32_t                             currentFrame = 0;
+
+    bool framebufferResized = false;
 
     std::vector<const char*> deviceExtensions = {
         vk::KHRSwapchainExtensionName,
