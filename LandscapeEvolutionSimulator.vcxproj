@@ -78,6 +78,7 @@
       <Message>Compiling Shaders</Message>
       <Command>C:\VulkanSDK\1.4.335.0\Bin\slangc.exe shaders/base.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o shaders/base.spv</Command>
       <Outputs>shaders/base.spv</Outputs>
+      <Inputs>shaders/base.slang</Inputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -105,6 +106,7 @@
       <Message>Compiling Shaders</Message>
       <Command>C:\VulkanSDK\1.4.335.0\Bin\slangc.exe shaders/base.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o shaders/base.spv</Command>
       <Outputs>shaders/base.spv</Outputs>
+      <Inputs>shaders/base.slang</Inputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
@@ -114,10 +116,14 @@
     <LocalDebuggerEnvironment>PATH=$(VULKAN_SDK)\Bin
 $(LocalDebuggerEnvironment)</LocalDebuggerEnvironment>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <CustomBuildAfterTargets>PreBuildEvent</CustomBuildAfterTargets>
+    <CustomBuildBeforeTargets>ResourceCompile</CustomBuildBeforeTargets>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerEnvironment>PATH=$(VULKAN_SDK)\Bin
 $(LocalDebuggerEnvironment)</LocalDebuggerEnvironment>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <CustomBuildAfterTargets>PreBuildEvent</CustomBuildAfterTargets>
+    <CustomBuildBeforeTargets>ResourceCompile</CustomBuildBeforeTargets>
   </PropertyGroup>
 </Project>

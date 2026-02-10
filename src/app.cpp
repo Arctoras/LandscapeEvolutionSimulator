@@ -1,10 +1,13 @@
 #include "app.h"
 
+#include <chrono>
 #include <iostream>
 #include <fstream>
 #include <ranges>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 
 constexpr uint32_t WIDTH = 800;
 constexpr uint32_t HEIGHT = 600;
@@ -52,6 +55,13 @@ const std::vector<uint16_t> indices = {
 };
 
 
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
+
 void App::run() {
     initWindow();
     initVulkan();
@@ -82,10 +92,14 @@ void App::initVulkan()
     createLogicalDevice();
     createSwapChain();
     createImageViews();
+    createDescriptorSetLayout();
     createGraphicsPipeline();
     createCommandPool();
     createVertexBuffer();
     createIndexBuffer();
+    createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
 }
@@ -348,6 +362,13 @@ void App::createImageViews()
 }
 
 
+void App::createDescriptorSetLayout() {
+    vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+    vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = 1, .pBindings = &uboLayoutBinding };
+    descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
+}
+
+
 vk::raii::ShaderModule App::createShaderModule(const std::vector<char>& code) const
 {
     vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size() * sizeof(char), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
@@ -376,59 +397,157 @@ void App::createGraphicsPipeline()
 {
     vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/base.spv"));
 
-    vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule, .pName = "vertMain" };
-    vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
+    vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ 
+       .stage  = vk::ShaderStageFlagBits::eVertex, 
+       .module = shaderModule, 
+       .pName  = "vertMain"
+    };
+    vk::PipelineShaderStageCreateInfo fragShaderStageInfo{
+        .stage  = vk::ShaderStageFlagBits::eFragment,
+        .module = shaderModule,
+        .pName  = "fragMain"
+    };
     vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
     auto                                     bindingDescription = Vertex::getBindingDescription();
     auto                                     attributeDescriptions = Vertex::getAttributeDescriptions();
-    vk::PipelineVertexInputStateCreateInfo   vertexInputInfo{ .vertexBindingDescriptionCount = 1, .pVertexBindingDescriptions = &bindingDescription, .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()), .pVertexAttributeDescriptions = attributeDescriptions.data() };
-    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{ .topology = vk::PrimitiveTopology::eTriangleList };
-    vk::PipelineViewportStateCreateInfo      viewportState{ .viewportCount = 1, .scissorCount = 1 };
+    vk::PipelineVertexInputStateCreateInfo   vertexInputInfo{
+        .vertexBindingDescriptionCount   = 1,
+        .pVertexBindingDescriptions      = &bindingDescription,
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+        .pVertexAttributeDescriptions    = attributeDescriptions.data() 
+    };
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
+        .topology = vk::PrimitiveTopology::eTriangleList 
+    };
+    vk::PipelineViewportStateCreateInfo      viewportState{
+        .viewportCount = 1,
+        .scissorCount  = 1
+    };
 
-    vk::PipelineRasterizationStateCreateInfo rasterizer{ .depthClampEnable = vk::False, .rasterizerDiscardEnable = vk::False, .polygonMode = vk::PolygonMode::eFill, .cullMode = vk::CullModeFlagBits::eBack, .frontFace = vk::FrontFace::eClockwise, .depthBiasEnable = vk::False, .depthBiasSlopeFactor = 1.0f, .lineWidth = 1.0f };
+    vk::PipelineRasterizationStateCreateInfo rasterizer{
+        .depthClampEnable        = vk::False,
+        .rasterizerDiscardEnable = vk::False,
+        .polygonMode             = vk::PolygonMode::eFill,
+        .cullMode                = vk::CullModeFlagBits::eBack,
+        .frontFace               = vk::FrontFace::eCounterClockwise,
+        .depthBiasEnable         = vk::False,
+        .depthBiasSlopeFactor    = 1.0f,
+        .lineWidth               = 1.0f
+    };
 
-    vk::PipelineMultisampleStateCreateInfo multisampling{ .rasterizationSamples = vk::SampleCountFlagBits::e1, .sampleShadingEnable = vk::False };
+    vk::PipelineMultisampleStateCreateInfo multisampling{
+        .rasterizationSamples = vk::SampleCountFlagBits::e1,
+        .sampleShadingEnable  = vk::False
+    };
 
-    vk::PipelineColorBlendAttachmentState colorBlendAttachment{ .blendEnable = vk::False,
-                                                               .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA };
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment{
+        .blendEnable    = vk::False,                            
+        .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
+    };
 
-    vk::PipelineColorBlendStateCreateInfo colorBlending{ .logicOpEnable = vk::False, .logicOp = vk::LogicOp::eCopy, .attachmentCount = 1, .pAttachments = &colorBlendAttachment };
+    vk::PipelineColorBlendStateCreateInfo colorBlending{
+        .logicOpEnable   = vk::False,
+        .logicOp         = vk::LogicOp::eCopy,
+        .attachmentCount = 1,
+        .pAttachments    = &colorBlendAttachment
+    };
 
     std::vector dynamicStates = {
         vk::DynamicState::eViewport,
         vk::DynamicState::eScissor };
-    vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
+    vk::PipelineDynamicStateCreateInfo dynamicState{
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates    = dynamicStates.data()
+    };
 
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 0, .pushConstantRangeCount = 0 };
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+        .setLayoutCount         = 1,
+        .pSetLayouts            = &*descriptorSetLayout,
+        .pushConstantRangeCount = 0
+    };
 
     pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
 
     vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
-        {.stageCount = 2,
-         .pStages = shaderStages,
-         .pVertexInputState = &vertexInputInfo,
-         .pInputAssemblyState = &inputAssembly,
-         .pViewportState = &viewportState,
-         .pRasterizationState = &rasterizer,
-         .pMultisampleState = &multisampling,
-         .pColorBlendState = &colorBlending,
-         .pDynamicState = &dynamicState,
-         .layout = pipelineLayout,
-         .renderPass = nullptr},
-        {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapChainSurfaceFormat.format} };
+        {
+            .stageCount          = 2,
+            .pStages             = shaderStages,
+            .pVertexInputState   = &vertexInputInfo,
+            .pInputAssemblyState = &inputAssembly,
+            .pViewportState      = &viewportState,
+            .pRasterizationState = &rasterizer,
+            .pMultisampleState   = &multisampling,
+            .pColorBlendState    = &colorBlending,
+            .pDynamicState       = &dynamicState,
+            .layout              = pipelineLayout,
+            .renderPass          = nullptr
+        },
+        {
+            .colorAttachmentCount    = 1,
+            .pColorAttachmentFormats = &swapChainSurfaceFormat.format
+        }
+    };
 
     graphicsPipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 }
 
 
-void App::createCommandPool()
+void App::createDescriptorPool()
 {
-    vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer, .queueFamilyIndex = queueIndex };
-    commandPool = vk::raii::CommandPool(device, poolInfo);
+    vk::DescriptorPoolSize poolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT);
+    vk::DescriptorPoolCreateInfo poolInfo{
+        .flags         = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets       = MAX_FRAMES_IN_FLIGHT,
+        .poolSizeCount = 1,
+        .pPoolSizes    = &poolSize
+    };
+
+    descriptorPool = vk::raii::DescriptorPool(device, poolInfo);
 }
 
 
+void App::createDescriptorSets()
+{
+    std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, *descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo allocInfo{
+        .descriptorPool     = descriptorPool,
+        .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts        = layouts.data()
+    };
+
+    descriptorSets.clear();
+    descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vk::DescriptorBufferInfo bufferInfo{
+            .buffer = uniformBuffers[i],
+            .offset = 0,
+            .range  = sizeof(UniformBufferObject)
+        };
+
+        vk::WriteDescriptorSet descriptorWrite{
+            .dstSet          = descriptorSets[i],
+            .dstBinding      = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType  = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo     = &bufferInfo
+        };
+
+        device.updateDescriptorSets(descriptorWrite, {});
+    }
+}
+
+
+void App::createCommandPool()
+{
+    vk::CommandPoolCreateInfo poolInfo{
+        .flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+        .queueFamilyIndex = queueIndex
+    };
+    commandPool = vk::raii::CommandPool(device, poolInfo);
+}
 
 
 void App::createVertexBuffer()
@@ -463,6 +582,25 @@ void App::createIndexBuffer()
 
     copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 }
+
+
+void App::createUniformBuffers()
+{
+    uniformBuffers.clear();
+    uniformBuffersMemory.clear();
+    uniformBuffersMapped.clear();
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+        vk::raii::Buffer buffer({});
+        vk::raii::DeviceMemory bufferMem({});
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+        uniformBuffers.emplace_back(std::move(buffer));
+        uniformBuffersMemory.emplace_back(std::move(bufferMem));
+        uniformBuffersMapped.emplace_back(uniformBuffersMemory[i].mapMemory(0, bufferSize));
+    }
+}
+
 
 void App::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory)
 {
@@ -552,6 +690,7 @@ void App::recordCommandBuffer(uint32_t imageIndex)
     commandBuffers[currentFrame].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
     commandBuffers[currentFrame].bindVertexBuffers(0, *vertexBuffer, { 0 });
     commandBuffers[currentFrame].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
+    commandBuffers[currentFrame].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[currentFrame], nullptr);
     commandBuffers[currentFrame].drawIndexed(indices.size(), 1, 0, 0, 0);
     commandBuffers[currentFrame].endRendering();
 
@@ -625,6 +764,25 @@ void App::createSyncObjects()
 }
 
 
+void App::updateUniformBuffer(uint32_t currentImage)
+{
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    UniformBufferObject ubo{};
+    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 10.0f);
+    ubo.proj[1][1] *= -1;
+
+    memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+}
+
+
 void App::drawFrame()
 {
     while (vk::Result::eTimeout == device.waitForFences(*inFlightFences[currentFrame], vk::True, UINT64_MAX))
@@ -644,6 +802,8 @@ void App::drawFrame()
     device.resetFences(*inFlightFences[currentFrame]);
     commandBuffers[currentFrame].reset();
     recordCommandBuffer(imageIndex);
+
+    updateUniformBuffer(currentFrame);  
 
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     const vk::SubmitInfo   submitInfo{ .waitSemaphoreCount = 1, .pWaitSemaphores = &*presentCompleteSemaphores[semaphoreIndex], .pWaitDstStageMask = &waitDestinationStageMask, .commandBufferCount = 1, .pCommandBuffers = &*commandBuffers[currentFrame], .signalSemaphoreCount = 1, .pSignalSemaphores = &*renderFinishedSemaphores[imageIndex] };

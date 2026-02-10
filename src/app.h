@@ -28,6 +28,7 @@ private:
     vk::Extent2D                chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
     void createSwapChain();
 
+    void createDescriptorSetLayout();
     [[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const;
     void createGraphicsPipeline();
 
@@ -37,6 +38,11 @@ private:
 
     void createVertexBuffer();
     void createIndexBuffer();
+    void createUniformBuffers();
+
+    void createDescriptorPool();
+    void createDescriptorSets();
+
     void createCommandPool();
     void createCommandBuffers();
 
@@ -45,6 +51,7 @@ private:
 
     void createSyncObjects();
 
+    void updateUniformBuffer(uint32_t currentImage);
     void drawFrame();
 
     void cleanupSwapChain();
@@ -83,13 +90,21 @@ private:
     vk::Extent2D                         swapChainExtent;
     std::vector<vk::raii::ImageView>     swapChainImageViews;
 
+    vk::raii::DescriptorSetLayout        descriptorSetLayout = nullptr;
     vk::raii::PipelineLayout             pipelineLayout = nullptr;
     vk::raii::Pipeline		             graphicsPipeline = nullptr;
 
-    vk::raii::Buffer       vertexBuffer = nullptr;
-    vk::raii::DeviceMemory vertexBufferMemory = nullptr;
-    vk::raii::Buffer       indexBuffer = nullptr;
-    vk::raii::DeviceMemory indexBufferMemory = nullptr;
+    vk::raii::Buffer                     vertexBuffer = nullptr;
+    vk::raii::DeviceMemory               vertexBufferMemory = nullptr;
+    vk::raii::Buffer                     indexBuffer = nullptr;
+    vk::raii::DeviceMemory               indexBufferMemory = nullptr;
+
+    std::vector<vk::raii::Buffer>        uniformBuffers;
+    std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
+    std::vector<void*>                   uniformBuffersMapped;
+
+    vk::raii::DescriptorPool             descriptorPool = nullptr;
+    std::vector<vk::raii::DescriptorSet> descriptorSets;
 
     vk::raii::CommandPool                commandPool = nullptr;
     std::vector<vk::raii::CommandBuffer> commandBuffers;
