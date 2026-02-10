@@ -31,6 +31,12 @@ private:
     [[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const;
     void createGraphicsPipeline();
 
+    void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory);
+    void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size);
+    [[nodiscard]] uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
+
+    void createVertexBuffer();
+    void createIndexBuffer();
     void createCommandPool();
     void createCommandBuffers();
 
@@ -80,6 +86,11 @@ private:
     vk::raii::PipelineLayout             pipelineLayout = nullptr;
     vk::raii::Pipeline		             graphicsPipeline = nullptr;
 
+    vk::raii::Buffer       vertexBuffer = nullptr;
+    vk::raii::DeviceMemory vertexBufferMemory = nullptr;
+    vk::raii::Buffer       indexBuffer = nullptr;
+    vk::raii::DeviceMemory indexBufferMemory = nullptr;
+
     vk::raii::CommandPool                commandPool = nullptr;
     std::vector<vk::raii::CommandBuffer> commandBuffers;
     
@@ -92,7 +103,7 @@ private:
 
     bool framebufferResized = false;
 
-    std::vector<const char*> deviceExtensions = {
+    std::vector<const char*> requiredDeviceExtensions = {
         vk::KHRSwapchainExtensionName,
         vk::KHRSpirv14ExtensionName,
         vk::KHRSynchronization2ExtensionName,
