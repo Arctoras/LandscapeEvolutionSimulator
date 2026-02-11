@@ -21,7 +21,7 @@ private:
 	void pickPhysicalDevice();
 	void createLogicalDevice();
 
-	[[nodiscard]] vk::raii::ImageView createImageView( vk::raii::Image &image, vk::Format format );
+	[[nodiscard]] vk::raii::ImageView createImageView( vk::raii::Image &image, vk::Format format, vk::ImageAspectFlags aspectFlags );
 	void createImageViews();
 
 	static uint32_t             chooseSwapMinImageCount( vk::SurfaceCapabilitiesKHR const &surfaceCapabilities );
@@ -54,11 +54,16 @@ private:
 	void createDescriptorPool();
 	void createDescriptorSets();
 
+	void createDepthResources();
+
+	[[nodiscard]] vk::Format findSupportedFormat( const std::vector<vk::Format> &candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features );
+	[[nodiscard]] vk::Format findDepthFormat();
+
 	void createCommandPool();
 	void createCommandBuffers();
 
 	void recordCommandBuffer( uint32_t imageIndex );
-	void transitionImageLayout( uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask );
+	void transitionImageLayout( vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::ImageAspectFlags imageAspectFlags );
 
 	void createSyncObjects();
 
@@ -110,6 +115,10 @@ private:
 	vk::raii::ImageView                  textureImageView = nullptr;
 	vk::raii::Sampler                    textureSampler = nullptr;
 
+	vk::raii::Image                      depthImage = nullptr;
+	vk::raii::DeviceMemory               depthImageMemory = nullptr;
+	vk::raii::ImageView                  depthImageView = nullptr;
+
 	vk::raii::Buffer                     vertexBuffer = nullptr;
 	vk::raii::DeviceMemory               vertexBufferMemory = nullptr;
 	vk::raii::Buffer                     indexBuffer = nullptr;
@@ -117,7 +126,7 @@ private:
 
 	std::vector<vk::raii::Buffer>        uniformBuffers;
 	std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
-	std::vector<void *>                   uniformBuffersMapped;
+	std::vector<void *>                  uniformBuffersMapped;
 
 	vk::raii::DescriptorPool             descriptorPool = nullptr;
 	std::vector<vk::raii::DescriptorSet> descriptorSets;
