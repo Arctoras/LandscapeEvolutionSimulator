@@ -7,6 +7,31 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+
+struct Vertex
+{
+	glm::vec3 pos;
+	glm::vec3 color;
+	glm::vec2 texCoord;
+
+	static vk::VertexInputBindingDescription getBindingDescription()
+	{
+		return { 0, sizeof( Vertex ), vk::VertexInputRate::eVertex };
+	}
+
+	static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
+	{
+		return {
+			vk::VertexInputAttributeDescription( 0, 0, vk::Format::eR32G32B32Sfloat, offsetof( Vertex, pos ) ),
+			vk::VertexInputAttributeDescription( 1, 0, vk::Format::eR32G32B32Sfloat, offsetof( Vertex, color ) ),
+			vk::VertexInputAttributeDescription( 2, 0, vk::Format::eR32G32Sfloat, offsetof( Vertex, texCoord ) )
+		};
+	}
+};
+
 
 class App
 {
@@ -14,6 +39,10 @@ public:
 	void run();
 private:
 	void initWindow();
+	void mainLoop();
+	void cleanup();
+
+	void generateMesh();
 
 	void initVulkan();
 	void createInstance();
@@ -74,10 +103,6 @@ private:
 	void recreateSwapChain();
 
 	static void framebufferResizeCallback( GLFWwindow *window, int width, int height );
-
-	void mainLoop();
-	void cleanup();
-
 
 	void setupDebugMessenger();
 	static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
@@ -149,5 +174,11 @@ private:
 		vk::KHRSynchronization2ExtensionName,
 		vk::KHRCreateRenderpass2ExtensionName
 	};
+
+	uint16_t gridWidth = 400;
+	uint16_t gridHeight = 400;
+	float gridScale = 1;
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
 };
 

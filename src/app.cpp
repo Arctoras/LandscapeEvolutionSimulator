@@ -5,9 +5,6 @@
 #include <fstream>
 #include <ranges>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 
@@ -27,45 +24,6 @@ constexpr bool enableValidationLayers = true;
 #endif
 
 
-struct Vertex
-{
-	glm::vec3 pos;
-	glm::vec3 color;
-	glm::vec2 texCoord;
-
-	static vk::VertexInputBindingDescription getBindingDescription()
-	{
-		return { 0, sizeof( Vertex ), vk::VertexInputRate::eVertex };
-	}
-
-	static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
-	{
-		return {
-			vk::VertexInputAttributeDescription( 0, 0, vk::Format::eR32G32B32Sfloat, offsetof( Vertex, pos ) ),
-			vk::VertexInputAttributeDescription( 1, 0, vk::Format::eR32G32B32Sfloat, offsetof( Vertex, color ) ),
-			vk::VertexInputAttributeDescription( 2, 0, vk::Format::eR32G32Sfloat, offsetof( Vertex, texCoord ) ) 
-		};
-	}
-};
-
-const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4
-};
-
-
 struct UniformBufferObject
 {
 	glm::mat4 model;
@@ -76,6 +34,8 @@ struct UniformBufferObject
 
 void App::run()
 {
+	generateMesh();
+
 	initWindow();
 	initVulkan();
 	mainLoop();
@@ -1086,11 +1046,11 @@ void App::updateUniformBuffer( uint32_t currentImage )
 	float time = std::chrono::duration<float, std::chrono::seconds::period>( currentTime - startTime ).count();
 
 	UniformBufferObject ubo{};
-	ubo.model = rotate( glm::mat4( 1.0f ), time * glm::radians( 90.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ) );
+	ubo.model = rotate( glm::mat4( 1.0f ), time * glm::radians( 15.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ) );
 
-	ubo.view = lookAt( glm::vec3( 2.0f, 2.0f, 2.0f ), glm::vec3( 0.0f, 0.0f, 0.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ) );
+	ubo.view = lookAt( time * glm::vec3( 0.05f, 0.05f, 0.025f ) + glm::vec3( 1.0f, 1.0f, 2.0f ), glm::vec3( 0.0f, 0.0f, 0.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ) );
 
-	ubo.proj = glm::perspective( glm::radians( 45.0f ), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 10.0f );
+	ubo.proj = glm::perspective( glm::radians( 45.0f ), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 50.0f );
 	ubo.proj[1][1] *= -1;
 
 	memcpy( uniformBuffersMapped[currentImage], &ubo, sizeof( ubo ) );
@@ -1202,6 +1162,63 @@ void App::cleanup()
 	glfwDestroyWindow( window );
 
 	glfwTerminate();
+}
+
+
+void App::generateMesh()
+{
+	uint32_t numVertices = static_cast<uint32_t>(gridWidth) * static_cast<uint32_t>(gridHeight);
+	uint64_t numIndices = 6 * static_cast<uint64_t>(gridWidth - 1) * static_cast<uint64_t>(gridHeight - 1);
+
+	vertices.resize( numVertices );
+
+	float left = -static_cast<float>(gridWidth - 1) / 2;
+	float bottom = -static_cast<float>(gridHeight - 1) / 2;
+
+	for( uint16_t y = 0; y < gridHeight; y++ )
+	{
+		for( uint16_t x = 0; x < gridWidth; x++ )
+		{
+			float xPos = left + x;
+			float yPos = bottom + y;
+
+			float xNorm = xPos / gridWidth;
+			float yNorm = yPos / gridHeight;
+
+			float height = 0;
+			for( int i = 0; i < 4; i++ )
+			{
+				height += (glm::sin( 13 * xNorm * glm::exp( i ) ) + glm::cos( 11 * yNorm * glm::exp( i ) )) / glm::exp( i );
+			}
+
+			std::cout << height << " ";
+
+			vertices[y * gridWidth + x] = Vertex{
+				.pos      = gridScale * glm::vec3(xPos, yPos, height),
+				.color    = {1, 1, 1},
+				.texCoord = {y, x}
+			};
+		}
+
+		std::cout << std::endl;
+	}
+
+	indices.resize( numIndices );
+
+	uint64_t id = 0;
+	for( uint16_t y = 0; y < gridHeight - 1; y++ )
+	{
+		for( uint16_t x = 0; x < gridWidth - 1; x++ )
+		{
+			indices[id++] = y * gridWidth + x;
+			indices[id++] = y * gridWidth + x + 1;
+			indices[id++] = (y + 1) * gridWidth + x + 1;
+
+			indices[id++] = (y + 1) * gridWidth + x + 1;
+			indices[id++] = (y + 1) * gridWidth + x;
+			indices[id++] = y * gridWidth + x;
+		}
+	}
 }
 
 
