@@ -1048,7 +1048,7 @@ void App::updateUniformBuffer( uint32_t currentImage )
 	UniformBufferObject ubo{};
 	ubo.model = rotate( glm::mat4( 1.0f ), time * glm::radians( 15.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ) );
 
-	ubo.view = lookAt( time * glm::vec3( 0.05f, 0.05f, 0.025f ) + glm::vec3( 1.0f, 1.0f, 2.0f ), glm::vec3( 0.0f, 0.0f, 0.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ) );
+	ubo.view = lookAt( time * glm::vec3( 0.05f, 0.05f, 0.025f ) + glm::vec3( 2.0f, 2.0f, 3.0f ), glm::vec3( 0.0f, 0.0f, 0.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ) );
 
 	ubo.proj = glm::perspective( glm::radians( 45.0f ), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 50.0f );
 	ubo.proj[1][1] *= -1;
@@ -1191,16 +1191,12 @@ void App::generateMesh()
 				height += (glm::sin( 13 * xNorm * glm::exp( i ) ) + glm::cos( 11 * yNorm * glm::exp( i ) )) / glm::exp( i );
 			}
 
-			std::cout << height << " ";
-
 			vertices[y * gridWidth + x] = Vertex{
 				.pos      = gridScale * glm::vec3(xPos, yPos, height),
 				.color    = {1, 1, 1},
 				.texCoord = {y, x}
 			};
 		}
-
-		std::cout << std::endl;
 	}
 
 	indices.resize( numIndices );
