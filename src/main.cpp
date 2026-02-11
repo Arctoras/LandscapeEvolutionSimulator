@@ -6,15 +6,19 @@
 
 int main()
 {
-    App app;
+	freopen( "output.txt", "w", stdout );
+	freopen( "output.txt", "w", stderr );
 
-    try {
-        app.run();
-    }
-    catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }
+	App app;
 
-    return EXIT_SUCCESS;
+	try
+	{
+		app.run();
+	} catch( const std::exception &e )
+	{
+		std::cerr << e.what() << std::endl;
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
 }

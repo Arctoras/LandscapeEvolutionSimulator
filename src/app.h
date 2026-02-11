@@ -11,118 +11,134 @@
 class App
 {
 public:
-    void run();
+	void run();
 private:
-    void initWindow();
+	void initWindow();
 
-    void initVulkan();
-    void createInstance();
-    void createSurface();
-    void pickPhysicalDevice();
-    void createLogicalDevice();
-    void createImageViews();
+	void initVulkan();
+	void createInstance();
+	void createSurface();
+	void pickPhysicalDevice();
+	void createLogicalDevice();
 
-    static uint32_t             chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities);
-    static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
-    static vk::PresentModeKHR   chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
-    vk::Extent2D                chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
-    void createSwapChain();
+	[[nodiscard]] vk::raii::ImageView createImageView( vk::raii::Image &image, vk::Format format );
+	void createImageViews();
 
-    void createDescriptorSetLayout();
-    [[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const;
-    void createGraphicsPipeline();
+	static uint32_t             chooseSwapMinImageCount( vk::SurfaceCapabilitiesKHR const &surfaceCapabilities );
+	static vk::SurfaceFormatKHR chooseSwapSurfaceFormat( const std::vector<vk::SurfaceFormatKHR> &availableFormats );
+	static vk::PresentModeKHR   chooseSwapPresentMode( const std::vector<vk::PresentModeKHR> &availablePresentModes );
+	vk::Extent2D                chooseSwapExtent( const vk::SurfaceCapabilitiesKHR &capabilities );
+	void createSwapChain();
 
-    void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory);
-    void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size);
-    [[nodiscard]] uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
+	void createDescriptorSetLayout();
+	[[nodiscard]] vk::raii::ShaderModule createShaderModule( const std::vector<char> &code ) const;
+	void createGraphicsPipeline();
 
-    void createVertexBuffer();
-    void createIndexBuffer();
-    void createUniformBuffers();
+	void createBuffer( vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory );
+	void copyBuffer( vk::raii::Buffer &srcBuffer, vk::raii::Buffer &dstBuffer, vk::DeviceSize size );
+	[[nodiscard]] uint32_t findMemoryType( uint32_t typeFilter, vk::MemoryPropertyFlags properties );
 
-    void createDescriptorPool();
-    void createDescriptorSets();
+	void createTextureImage();
+	void createImage( uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image &image, vk::raii::DeviceMemory &imageMemory );
+	void transitionImageLayout( const vk::raii::Image &image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout );
+	void copyBufferToImage( const vk::raii::Buffer &buffer, vk::raii::Image &image, uint32_t width, uint32_t height );
+	[[nodiscard]] std::unique_ptr<vk::raii::CommandBuffer> beginSingleTimeCommands();
+	void endSingleTimeCommands( vk::raii::CommandBuffer &commandBuffer );
+	void createTextureImageView();
+	void createTextureSampler();
 
-    void createCommandPool();
-    void createCommandBuffers();
+	void createVertexBuffer();
+	void createIndexBuffer();
+	void createUniformBuffers();
 
-    void recordCommandBuffer(uint32_t imageIndex);
-    void transitionImageLayout(uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask);
+	void createDescriptorPool();
+	void createDescriptorSets();
 
-    void createSyncObjects();
+	void createCommandPool();
+	void createCommandBuffers();
 
-    void updateUniformBuffer(uint32_t currentImage);
-    void drawFrame();
+	void recordCommandBuffer( uint32_t imageIndex );
+	void transitionImageLayout( uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask );
 
-    void cleanupSwapChain();
-    void recreateSwapChain();
+	void createSyncObjects();
 
-    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+	void updateUniformBuffer( uint32_t currentImage );
+	void drawFrame();
 
-    void mainLoop();
-    void cleanup();
+	void cleanupSwapChain();
+	void recreateSwapChain();
+
+	static void framebufferResizeCallback( GLFWwindow *window, int width, int height );
+
+	void mainLoop();
+	void cleanup();
 
 
-    void setupDebugMessenger();
-    static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
-        vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
-        vk::DebugUtilsMessageTypeFlagsEXT type,
-        const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData,
-        void*);
+	void setupDebugMessenger();
+	static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
+		vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+		vk::DebugUtilsMessageTypeFlagsEXT type,
+		const vk::DebugUtilsMessengerCallbackDataEXT *pCallbackData,
+		void * );
 
 private:
-    GLFWwindow* window = nullptr;
+	GLFWwindow *window = nullptr;
 
-    vk::raii::Context                    context;
-    vk::raii::Instance                   instance = nullptr;
-    vk::raii::DebugUtilsMessengerEXT     debugMessenger = nullptr;
+	vk::raii::Context                    context;
+	vk::raii::Instance                   instance = nullptr;
+	vk::raii::DebugUtilsMessengerEXT     debugMessenger = nullptr;
 
-    vk::raii::SurfaceKHR                 surface = nullptr;
+	vk::raii::SurfaceKHR                 surface = nullptr;
 
-    vk::raii::PhysicalDevice             physicalDevice = nullptr;
-    vk::raii::Device                     device = nullptr;
+	vk::raii::PhysicalDevice             physicalDevice = nullptr;
+	vk::raii::Device                     device = nullptr;
 
-    uint32_t                             queueIndex = ~0;
-    vk::raii::Queue                      queue = nullptr;
-    vk::raii::SwapchainKHR               swapChain = nullptr;
-    std::vector<vk::Image>               swapChainImages;
-    vk::SurfaceFormatKHR                 swapChainSurfaceFormat;
-    vk::Extent2D                         swapChainExtent;
-    std::vector<vk::raii::ImageView>     swapChainImageViews;
+	uint32_t                             queueIndex = ~0;
+	vk::raii::Queue                      queue = nullptr;
+	vk::raii::SwapchainKHR               swapChain = nullptr;
+	std::vector<vk::Image>               swapChainImages;
+	vk::SurfaceFormatKHR                 swapChainSurfaceFormat;
+	vk::Extent2D                         swapChainExtent;
+	std::vector<vk::raii::ImageView>     swapChainImageViews;
 
-    vk::raii::DescriptorSetLayout        descriptorSetLayout = nullptr;
-    vk::raii::PipelineLayout             pipelineLayout = nullptr;
-    vk::raii::Pipeline		             graphicsPipeline = nullptr;
+	vk::raii::DescriptorSetLayout        descriptorSetLayout = nullptr;
+	vk::raii::PipelineLayout             pipelineLayout = nullptr;
+	vk::raii::Pipeline		             graphicsPipeline = nullptr;
 
-    vk::raii::Buffer                     vertexBuffer = nullptr;
-    vk::raii::DeviceMemory               vertexBufferMemory = nullptr;
-    vk::raii::Buffer                     indexBuffer = nullptr;
-    vk::raii::DeviceMemory               indexBufferMemory = nullptr;
+	vk::raii::Image                      textureImage = nullptr;
+	vk::raii::DeviceMemory               textureImageMemory = nullptr;
+	vk::raii::ImageView                  textureImageView = nullptr;
+	vk::raii::Sampler                    textureSampler = nullptr;
 
-    std::vector<vk::raii::Buffer>        uniformBuffers;
-    std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
-    std::vector<void*>                   uniformBuffersMapped;
+	vk::raii::Buffer                     vertexBuffer = nullptr;
+	vk::raii::DeviceMemory               vertexBufferMemory = nullptr;
+	vk::raii::Buffer                     indexBuffer = nullptr;
+	vk::raii::DeviceMemory               indexBufferMemory = nullptr;
 
-    vk::raii::DescriptorPool             descriptorPool = nullptr;
-    std::vector<vk::raii::DescriptorSet> descriptorSets;
+	std::vector<vk::raii::Buffer>        uniformBuffers;
+	std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
+	std::vector<void *>                   uniformBuffersMapped;
 
-    vk::raii::CommandPool                commandPool = nullptr;
-    std::vector<vk::raii::CommandBuffer> commandBuffers;
-    
-    std::vector<vk::raii::Semaphore>     presentCompleteSemaphores;
-    std::vector<vk::raii::Semaphore>     renderFinishedSemaphores;
-    std::vector<vk::raii::Fence>         inFlightFences;
+	vk::raii::DescriptorPool             descriptorPool = nullptr;
+	std::vector<vk::raii::DescriptorSet> descriptorSets;
 
-    uint32_t                             semaphoreIndex = 0;
-    uint32_t                             currentFrame = 0;
+	vk::raii::CommandPool                commandPool = nullptr;
+	std::vector<vk::raii::CommandBuffer> commandBuffers;
 
-    bool framebufferResized = false;
+	std::vector<vk::raii::Semaphore>     presentCompleteSemaphores;
+	std::vector<vk::raii::Semaphore>     renderFinishedSemaphores;
+	std::vector<vk::raii::Fence>         inFlightFences;
 
-    std::vector<const char*> requiredDeviceExtensions = {
-        vk::KHRSwapchainExtensionName,
-        vk::KHRSpirv14ExtensionName,
-        vk::KHRSynchronization2ExtensionName,
-        vk::KHRCreateRenderpass2ExtensionName
-    };
+	uint32_t                             semaphoreIndex = 0;
+	uint32_t                             currentFrame = 0;
+
+	bool framebufferResized = false;
+
+	std::vector<const char *> requiredDeviceExtensions = {
+		vk::KHRSwapchainExtensionName,
+		vk::KHRSpirv14ExtensionName,
+		vk::KHRSynchronization2ExtensionName,
+		vk::KHRCreateRenderpass2ExtensionName
+	};
 };
 
