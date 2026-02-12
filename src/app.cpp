@@ -29,6 +29,8 @@ struct UniformBufferObject
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
+
+	glm::vec3 lightDir;
 };
 
 
@@ -377,7 +379,7 @@ void App::createImageViews()
 void App::createDescriptorSetLayout()
 {
 	std::array bindings = {
-		vk::DescriptorSetLayoutBinding( 0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr ),
+		vk::DescriptorSetLayoutBinding( 0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr ),
 		vk::DescriptorSetLayoutBinding( 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr )
 	};
 
@@ -1052,6 +1054,8 @@ void App::updateUniformBuffer( uint32_t currentImage )
 
 	ubo.proj = glm::perspective( glm::radians( 45.0f ), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 50.0f );
 	ubo.proj[1][1] *= -1;
+
+	ubo.lightDir = { 0.5f,0.5f,-0.5f };
 
 	memcpy( uniformBuffersMapped[currentImage], &ubo, sizeof( ubo ) );
 }
