@@ -37,12 +37,15 @@ class App
 {
 public:
 	void run();
+
 private:
 	void initWindow();
 	void mainLoop();
 	void cleanup();
 
 	void generateMesh();
+
+	void processInputs();
 
 	void initVulkan();
 	void createInstance();
@@ -175,10 +178,24 @@ private:
 		vk::KHRCreateRenderpass2ExtensionName
 	};
 
-	uint16_t gridWidth = 400;
-	uint16_t gridHeight = 400;
-	float gridScale = 1;
+	const uint16_t gridWidth = 1000;  // grid width in m
+	const uint16_t gridHeight = 1000; // grid height in m
+	const float resolution = 2;       // vertices per m
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
+
+public:
+	glm::vec3 cameraPosition = {2, 2, 20};
+	glm::vec3 cameraDirection = {-0.5f, -0.5f, -0.5f};
+	float speed = 5;
+	float mouseSensitivity = 1;
+
+	float prevTime = 0;
+	float time = 0;
+	float deltaTime = 0;
+
+	glm::vec2 prevCursorPos = { 0, 0 };
+	glm::vec2 cursorPos = { 0, 0 };
+	glm::vec2 cursorPosDelta = { 0, 0 };
 };
 

@@ -30,7 +30,7 @@
 *.lai
 *.la
 *.a
-*.lib
+#*.lib
 
 # Executables
 *.exe
@@ -47,6 +47,7 @@
 *.log
 *.recipe
 *.FileListAbsolute*
+*.enc
 
 # Shader files
 *.spv
