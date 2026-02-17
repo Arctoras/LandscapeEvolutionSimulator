@@ -1,8 +1,8 @@
 struct VSInput
 {
-    float3 inPosition;
-    float3 inColor;
-    float2 inTexCoord;
+    float2 pos;
+    uint2 bumpId;
+    float2 UV;
 };
 
 struct UniformBuffer
@@ -17,18 +17,22 @@ ConstantBuffer<UniformBuffer> ubo;
 struct VSOutput
 {
     float4 pos : SV_Position;
+    float2 UV;
     float3 normal;
-    float3 colour;
-    float2 fragTexCoord;
 };
+
+Texture2D bumpMap;
 
 [shader("vertex")]
 VSOutput vertMain(VSInput input)
 {
     VSOutput output;
-    output.pos = mul(ubo.proj, mul(ubo.view, mul(ubo.model, float4(input.inPosition, 1.0))));
-    output.colour = input.inColor;
-    output.fragTexCoord = input.inTexCoord;
+
+    float4 bump = bumpMap[input.bumpId];
+
+    output.pos = mul(ubo.proj, mul(ubo.view, mul(ubo.model, float4(input.pos, bump.w, 1.0))));
+    output.normal = normalize((2.0 * bump.xyz) - 1.0);
+    output.UV = input.UV;
     return output;
 }
 
@@ -37,7 +41,8 @@ Sampler2D texture;
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET
 {
-    float3 normal = normalize((2.0 * texture.Sample(vertIn.fragTexCoord).rgb) - 1.0);
+    float3 normal = normalize(vertIn.normal);
+    float3 colour = texture.Sample(vertIn.UV).rgb;
 
-    return float4(vertIn.colour * max(dot(normal, -normalize(ubo.lightDir)),0.0),1.0);
+    return float4(colour * max(dot(normal, -normalize(ubo.lightDir)),0.0),1.0);
 }
