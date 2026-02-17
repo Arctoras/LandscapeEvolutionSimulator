@@ -1206,12 +1206,23 @@ void App::framebufferResizeCallback( GLFWwindow *window, int width, int height )
 
 void App::mainLoop()
 {
+	int frames = 0;
+	float timer = 0;
     while( !glfwWindowShouldClose( window ) )
     {
         glfwPollEvents();
         processInputs();
 
-        drawFrame();
+		drawFrame();
+		
+		frames++;
+		timer += deltaTime;
+		if (timer > 1)
+		{
+			std::cout << "fps: " << frames / timer << std::endl;
+			timer = 0;
+			frames = 0;
+		}
     }
 
     device.waitIdle();
@@ -1233,8 +1244,6 @@ void App::processInputs()
 	float pitch = cursorPosDelta.y * mouseSensitivity * deltaTime;
 
 	float angleUp = glm::acos(glm::dot(cameraDirection, glm::vec3(0, 0, 1)));
-	if( pitch != 0)
-		std::cout << pitch << " | " << angleUp << std::endl;
 
 	if (pitch < 0 && angleUp + pitch - 0.02f < 0 ||
 		pitch > 0 && angleUp + pitch + 0.02f > glm::pi<float>()) {
