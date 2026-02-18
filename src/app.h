@@ -14,7 +14,8 @@
 struct Vertex
 {
 	glm::vec3 pos;
-	glm::vec3 color;
+	glm::vec3 normal;
+	glm::vec4 states;
 	glm::vec2 texCoord;
 
 	static vk::VertexInputBindingDescription getBindingDescription()
@@ -22,16 +23,27 @@ struct Vertex
 		return { 0, sizeof( Vertex ), vk::VertexInputRate::eVertex };
 	}
 
-	static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
+	static std::array<vk::VertexInputAttributeDescription, 4> getAttributeDescriptions()
 	{
 		return {
 			vk::VertexInputAttributeDescription( 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) ),
-			vk::VertexInputAttributeDescription( 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) ),
-			vk::VertexInputAttributeDescription( 2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord) )
+			vk::VertexInputAttributeDescription( 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal) ),
+			vk::VertexInputAttributeDescription( 2, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, states) ),
+			vk::VertexInputAttributeDescription( 3, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord) )
 		};
 	}
 };
 
+constexpr float noiseFrequency = 0.001f;
+constexpr float heightScale = 250;
+constexpr uint32_t gridWidth = 2000;
+constexpr uint32_t gridHeight = 2000;
+
+static_assert(gridWidth <= UINT32_MAX / gridHeight, "Too many vertices in grid");
+
+constexpr uint32_t numVertices = gridWidth * gridHeight;
+
+static_assert(numVertices % 64 == 0, "Number of vertices is not divisible by 64");
 
 class App
 {
@@ -178,14 +190,11 @@ private:
 		vk::KHRCreateRenderpass2ExtensionName
 	};
 
-	const uint16_t gridWidth = 1000;  // grid width in m
-	const uint16_t gridHeight = 1000; // grid height in m
-	const float resolution = 2;       // vertices per m
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 
 public:
-	glm::vec3 cameraPosition = {2, 2, 20};
+	glm::vec3 cameraPosition = {0, 0, 40};
 	glm::vec3 cameraDirection = {-0.5f, -0.5f, -0.5f};
 	float speed = 5;
 	float mouseSensitivity = 1;

@@ -1,15 +1,17 @@
 struct VSInput
 {
-    float3 inPosition;
-    float3 inColor;
-    float2 inTexCoord;
+    float3 pos;
+    float3 normal;
+    float4 states;
+    float2 UV;
 };
 
 struct UniformBuffer
 {
-    float4x4 model;
     float4x4 view;
     float4x4 proj;
+    float2 instanceOffset;
+
     float3 lightDir;
 };
 ConstantBuffer<UniformBuffer> ubo;
@@ -17,18 +19,24 @@ ConstantBuffer<UniformBuffer> ubo;
 struct VSOutput
 {
     float4 pos : SV_Position;
-    float3 normal;
     float3 colour;
-    float2 fragTexCoord;
+    float3 normal;
+    float2 UV;
+    float height;
 };
 
 [shader("vertex")]
-VSOutput vertMain(VSInput input)
+VSOutput vertMain(VSInput input, uint instanceId : SV_InstanceID)
 {
+    int xOffset = (instanceId % 3) - 1;
+    int yOffset = (instanceId / 3) - 1;
+    float3 position = float3(input.pos.x + ubo.instanceOffset.x * xOffset, input.pos.y + ubo.instanceOffset.y * yOffset, input.pos.z);
+
     VSOutput output;
-    output.pos = mul(ubo.proj, mul(ubo.view, mul(ubo.model, float4(input.inPosition, 1.0))));
-    output.colour = input.inColor;
-    output.fragTexCoord = input.inTexCoord;
+    output.pos = mul(ubo.proj, mul(ubo.view, float4(position, 1.0)));
+    output.normal = input.normal;
+    output.UV = input.UV;
+    output.height = input.pos.z;
     return output;
 }
 
@@ -37,7 +45,38 @@ Sampler2D texture;
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET
 {
-    float3 normal = normalize((2.0 * texture.Sample(vertIn.fragTexCoord).rgb) - 1.0);
+    float3 colour = float3(0.0);
 
-    return float4(vertIn.colour * max(dot(normal, -normalize(ubo.lightDir)),0.0),1.0);
+    colour.r = max(0.0, min(1.0, (vertIn.height - 10) / 25.0));
+    colour.g = max(0.0, min(1.0, (vertIn.height + 10) / 35.0));
+    if (vertIn.height < 0) colour.b = 1 - min(1.0, vertIn.height / 40);
+    if (vertIn.height > 40) colour = float3(1.0);
+
+    if (length(ubo.lightDir) == 0)
+    {
+        return float4(colour, 1.0);
+    }
+    else
+    {
+        // float4 colour = texture.Sample(vertIn.UV);
+
+        float3 normal = normalize(vertIn.normal);
+
+        float lambertian = max(dot(ubo.lightDir, normal), 0.0);
+        float specular = 0;
+
+        if (lambertian > 0)
+        {
+            float3 viewDir = normalize(-vertIn.pos.xyz);
+
+            float3 halfDir = normalize(ubo.lightDir + viewDir);
+            float specAngle = max(dot(halfDir, normal), 0.0);
+            specular = pow(specAngle, 16);
+        }
+
+        return float4(colour * 0.1 +       // Ambient
+                      colour * lambertian + // Diffuse
+                      colour * specular,    // Specular
+                      1.0);
+    }
 }

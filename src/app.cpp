@@ -3,7 +3,8 @@
 #include <chrono>
 #include <iostream>
 #include <fstream>
-#include <ranges>
+
+#include <FastNoise/FastNoise.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -26,9 +27,9 @@ constexpr bool enableValidationLayers = true;
 
 struct UniformBufferObject
 {
-    glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
+    glm::vec2 instanceOffset;
 
     glm::vec3 lightDir;
 };
@@ -36,18 +37,18 @@ struct UniformBufferObject
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-	{
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
-	}
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+    }
 }
 
 
 static void cursorPositionCallback(GLFWwindow *window, double xPos, double yPos)
 {
     App *app = static_cast<App *>(glfwGetWindowUserPointer(window));
-	app->cursorPos = { xPos, yPos };
+    app->cursorPos = { xPos, yPos };
 }
 
 
@@ -70,12 +71,12 @@ static void scrollCallback(GLFWwindow* window, double xOffset, double yOffset)
 
     if( yOffset < 0 )
     {
-		app->speed *= 0.9f;
-	} 
-	else if(yOffset > 0)
-	{
-		app->speed *= 1.1f;
-	}
+        app->speed *= 0.9f;
+    } 
+    else if(yOffset > 0)
+    {
+        app->speed *= 1.1f;
+    }
 }
 
 
@@ -1020,7 +1021,7 @@ void App::recordCommandBuffer( uint32_t imageIndex )
     commandBuffers[currentFrame].bindVertexBuffers( 0, *vertexBuffer, { 0 } );
     commandBuffers[currentFrame].bindIndexBuffer( *indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value );
     commandBuffers[currentFrame].bindDescriptorSets( vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[currentFrame], nullptr );
-    commandBuffers[currentFrame].drawIndexed( static_cast<uint32_t>(indices.size()), 1, 0, 0, 0 );
+    commandBuffers[currentFrame].drawIndexed( static_cast<uint32_t>(indices.size()), 9, 0, 0, 0 );
     commandBuffers[currentFrame].endRendering();
 
     // After rendering, transition the swapchain image to PRESENT_SRC
@@ -1103,14 +1104,14 @@ void App::updateUniformBuffer( uint32_t currentImage )
     prevTime = time;
 
     UniformBufferObject ubo{};
-    ubo.model = glm::mat4( 1.0f );
-
     ubo.view = lookAt( cameraPosition, cameraPosition + cameraDirection, glm::vec3( 0.0f, 0.0f, 1.0f ) );
 
     ubo.proj = glm::perspective( glm::radians( 45.0f ), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 1000.0f );
     ubo.proj[1][1] *= -1;
+
+    ubo.instanceOffset = { gridWidth - 1, gridHeight - 1 };
     
-    ubo.lightDir = { 0.5f,0.5f,-0.5f };
+    ubo.lightDir = { 0.5f,0.25f,-0.5f };
 
     memcpy( uniformBuffersMapped[currentImage], &ubo, sizeof( ubo ) );
 }
@@ -1206,23 +1207,23 @@ void App::framebufferResizeCallback( GLFWwindow *window, int width, int height )
 
 void App::mainLoop()
 {
-	int frames = 0;
-	float timer = 0;
+    int frames = 0;
+    float timer = 0;
     while( !glfwWindowShouldClose( window ) )
     {
         glfwPollEvents();
         processInputs();
 
-		drawFrame();
-		
-		frames++;
-		timer += deltaTime;
-		if (timer > 1)
-		{
-			std::cout << "fps: " << frames / timer << std::endl;
-			timer = 0;
-			frames = 0;
-		}
+        drawFrame();
+        
+        frames++;
+        timer += deltaTime;
+        if (timer > 1)
+        {
+            std::cout << "fps: " << frames / timer << std::endl;
+            timer = 0;
+            frames = 0;
+        }
     }
 
     device.waitIdle();
@@ -1237,31 +1238,38 @@ void App::processInputs()
         glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) - glfwGetKey(window, GLFW_KEY_SPACE)
     };
 
-	cursorPosDelta = cursorPos - prevCursorPos;
-	prevCursorPos = cursorPos;
+    cursorPosDelta = cursorPos - prevCursorPos;
+    prevCursorPos = cursorPos;
 
-	float yaw = cursorPosDelta.x * mouseSensitivity * deltaTime;
-	float pitch = cursorPosDelta.y * mouseSensitivity * deltaTime;
+    float yaw = cursorPosDelta.x * mouseSensitivity * deltaTime;
+    float pitch = cursorPosDelta.y * mouseSensitivity * deltaTime;
 
-	float angleUp = glm::acos(glm::dot(cameraDirection, glm::vec3(0, 0, 1)));
+    float angleUp = glm::acos(glm::dot(cameraDirection, glm::vec3(0, 0, 1)));
 
-	if (pitch < 0 && angleUp + pitch - 0.02f < 0 ||
-		pitch > 0 && angleUp + pitch + 0.02f > glm::pi<float>()) {
-		pitch = 0;
-	}
+    if (pitch < 0 && angleUp + pitch - 0.02f < 0 ||
+        pitch > 0 && angleUp + pitch + 0.02f > glm::pi<float>()) {
+        pitch = 0;
+    }
 
     cameraDirection = glm::vec4(cameraDirection, 1.0f) * glm::rotate(glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0, 0, 1)), pitch, glm::normalize(glm::cross(cameraDirection, glm::vec3(0, 0, 1))));
 
-	if (glm::length(movementDirection) > 0)
-	{
-		glm::vec3 forward = cameraDirection;
-		glm::vec3 right = glm::cross(forward, glm::vec3(0, 0, 1));
-		glm::vec3 up = glm::cross(forward, right);
+    if (glm::length(movementDirection) > 0)
+    {
+        glm::vec3 forward = cameraDirection;
+        glm::vec3 right = glm::cross(forward, glm::vec3(0, 0, 1));
+        glm::vec3 up = glm::cross(forward, right);
 
-		glm::vec3 displacement = glm::normalize(movementDirection) * speed * deltaTime;
+        glm::vec3 displacement = glm::normalize(movementDirection) * speed * deltaTime;
 
-		cameraPosition += right * displacement.x + forward * displacement.y + up * displacement.z;
-	}
+        cameraPosition += right * displacement.x + forward * displacement.y + up * displacement.z;
+
+        float xEdge = gridWidth / 2.0f;
+        float yEdge = gridHeight / 2.0f;
+        if (cameraPosition.x > xEdge) cameraPosition.x -= gridWidth;
+        if (cameraPosition.x < -xEdge) cameraPosition.x += gridWidth;
+        if (cameraPosition.y > yEdge) cameraPosition.y -= gridHeight;
+        if (cameraPosition.y < -yEdge) cameraPosition.y += gridHeight;
+    }
 }
 
 
@@ -1275,37 +1283,43 @@ void App::cleanup()
 
 void App::generateMesh()
 {
-    uint32_t width = std::min(static_cast<uint32_t>(gridWidth * resolution), static_cast<uint32_t>(UINT16_MAX));
-    uint32_t height = std::min(static_cast<uint32_t>(gridHeight * resolution), static_cast<uint32_t>(UINT16_MAX));
-    
-    uint32_t numVertices = width * height;
-    uint64_t numIndices = 6 * (width - 1) * (height - 1);
+    auto start = std::chrono::high_resolution_clock::now();
 
-    vertices.resize( numVertices );
+    uint64_t numIndices = 6 * (gridWidth - 1) * (gridHeight - 1);
+
+    vertices.resize(numVertices);
 
     float left = -static_cast<float>(gridWidth - 1) / 2;
     float bottom = -static_cast<float>(gridHeight - 1) / 2;
 
-    for (uint16_t y = 0; y < height; y++)
+    FastNoise noise;
+    noise.SetFractalOctaves(6);
+    noise.SetFrequency(noiseFrequency);
+
+    for (uint32_t y = 0; y < gridHeight; y++)
     {
-        for (uint16_t x = 0; x < width; x++)
+        for (uint32_t x = 0; x < gridWidth; x++)
         {
-            float xPos = left + (x / resolution);
-            float yPos = bottom + (y / resolution);
+            float xPos = left + x;
+            float yPos = bottom + y;
 
-            float xNorm = 2 * xPos / gridWidth;
-            float yNorm = 2 * yPos / gridHeight;
+            float s = x / static_cast<float>(gridWidth - 1);
+            float t = y / static_cast<float>(gridHeight - 1);
 
-            float zPos = 0;
-            for (int i = 0; i < 4; i++)
-            {
-                zPos += (glm::sin(13 * xNorm * glm::exp(i)) + glm::cos(11 * yNorm * glm::exp(i))) / glm::exp(i);
-            }
+            float width = gridWidth - 1;
+            float height = gridHeight - 1;
 
-            vertices[y * width + x] = Vertex{
-                .pos      = {xPos, yPos, 10 * zPos},
-                .color    = {1, 1, 1},
-                .texCoord = {y, x}
+            float nx = left + glm::cos(s * 2 * glm::pi<float>()) * width / (2 * glm::pi<float>());
+            float ny = bottom + glm::cos(t * 2 * glm::pi<float>()) * height / (2 * glm::pi<float>());
+            float nz = left + glm::sin(s * 2 * glm::pi<float>()) * width / (2 * glm::pi<float>());
+            float nw = bottom + glm::sin(t * 2 * glm::pi<float>()) * height / (2 * glm::pi<float>());
+
+            float zPos = heightScale * noise.GetSimplexFractal(nx, ny, nz, nw);
+
+            vertices[y * gridWidth + x] = Vertex{
+                .pos      = {xPos, yPos, zPos},
+                .states   = {zPos, std::max(0.0f, -zPos), 0, 0},
+                .texCoord = {x, y}
             };
         }
     }
@@ -1313,19 +1327,41 @@ void App::generateMesh()
     indices.resize(numIndices);
 
     uint64_t id = 0;
-    for (uint16_t y = 0; y < height - 1; y++)
+    for (uint32_t y = 0; y < gridHeight - 1; y++)
     {
-        for (uint16_t x = 0; x < width - 1; x++)
+        for (uint32_t x = 0; x < gridWidth - 1; x++)
         {
-            indices[id++] = y * width + x;
-            indices[id++] = y * width + x + 1;
-            indices[id++] = (y + 1) * width + x + 1;
+            indices[id++] = y * gridWidth + x;
+            indices[id++] = y * gridWidth + x + 1;
+            indices[id++] = (y + 1) * gridWidth + x + 1;
 
-            indices[id++] = (y + 1) * width + x + 1;
-            indices[id++] = (y + 1) * width + x;
-            indices[id++] = y * width + x;
+            indices[id++] = (y + 1) * gridWidth + x + 1;
+            indices[id++] = (y + 1) * gridWidth + x;
+            indices[id++] = y * gridWidth + x;
+
+
+            float px;
+            float nx;
+            float py;
+            float ny;
+			if (x + 1 == gridWidth)  px = vertices[y * gridWidth + 1].pos.z;
+			else                     px = vertices[y * gridWidth + x + 1].pos.z;
+			if (x == 0)              nx = vertices[(y + 1) * gridWidth - 2].pos.z;
+            else                     nx = vertices[y * gridWidth + x - 1].pos.z;
+			if (y + 1 == gridHeight) py = vertices[gridWidth + x].pos.z;
+			else                     py = vertices[(y + 1) * gridWidth + x].pos.z;
+			if (y == 0)				 ny = vertices[(gridHeight - 2) * gridWidth + x].pos.z;
+			else                     ny = vertices[(y - 1)  * gridWidth + x].pos.z;
+
+            vertices[y * gridWidth + x].normal = glm::cross(
+                glm::normalize(glm::vec3(-1, 0, nx) - glm::vec3(1, 0, px)),
+                glm::normalize(glm::vec3(0, -1, ny) - glm::vec3(0, 1, py)));
         }
     }
+
+    
+    float duration = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - start).count();
+    std::cout << "Seed Terrain [ " << gridWidth << " x " << gridHeight << " ] Generation Time - " << duration << " seconds" << std::endl;
 }
 
 
