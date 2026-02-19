@@ -41,5 +41,8 @@
     <None Include="shaders\base.slang">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="shaders\compute.slang">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

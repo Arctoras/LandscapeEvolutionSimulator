@@ -2,15 +2,13 @@ struct VSInput
 {
     float3 pos;
     float3 normal;
-    float4 states;
-    float2 UV;
 };
 
 struct UniformBuffer
 {
     float4x4 view;
     float4x4 proj;
-    float2 instanceOffset;
+    int2 instanceOffset;
 
     float3 lightDir;
 };
@@ -21,21 +19,19 @@ struct VSOutput
     float4 pos : SV_Position;
     float3 colour;
     float3 normal;
-    float2 UV;
     float height;
 };
 
 [shader("vertex")]
 VSOutput vertMain(VSInput input, uint instanceId : SV_InstanceID)
 {
-    int xOffset = (instanceId % 3) - 1;
-    int yOffset = (instanceId / 3) - 1;
+    int xOffset = int(instanceId % 3) - 1;
+    int yOffset = int(instanceId / 3) - 1;
     float3 position = float3(input.pos.x + ubo.instanceOffset.x * xOffset, input.pos.y + ubo.instanceOffset.y * yOffset, input.pos.z);
 
     VSOutput output;
     output.pos = mul(ubo.proj, mul(ubo.view, float4(position, 1.0)));
     output.normal = input.normal;
-    output.UV = input.UV;
     output.height = input.pos.z;
     return output;
 }
@@ -74,9 +70,9 @@ float4 fragMain(VSOutput vertIn) : SV_TARGET
             specular = pow(specAngle, 16);
         }
 
-        return float4(colour * 0.1 +       // Ambient
-                      colour * lambertian + // Diffuse
-                      colour * specular,    // Specular
+        return float4(colour * 0.1 +          // Ambient
+                      colour * lambertian +   // Diffuse
+                      float3(1.0) * specular, // Specular
                       1.0);
     }
 }

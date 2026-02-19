@@ -22,6 +22,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\base.slang" />
+    <None Include="shaders\compute.slang" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{49a1a7e1-5dab-4dea-8201-4d61e33a8fbb}</ProjectGuid>
@@ -78,9 +79,10 @@
     </Link>
     <CustomBuildStep>
       <Message>Compiling Shaders</Message>
-      <Command>C:\VulkanSDK\1.4.335.0\Bin\slangc.exe shaders/base.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o shaders/base.spv</Command>
-      <Outputs>shaders/base.spv</Outputs>
-      <Inputs>shaders/base.slang</Inputs>
+      <Command>$(VULKAN_SDK)\Bin\slangc.exe shaders/base.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o shaders/base.spv
+$(VULKAN_SDK)\Bin\slangc.exe shaders/compute.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry simulate -o shaders/compute.spv</Command>
+      <Outputs>shaders/base.spv;shaders/compute.spv</Outputs>
+      <Inputs>shaders/base.slang;shaders/compute.slang</Inputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -106,9 +108,10 @@
     </Link>
     <CustomBuildStep>
       <Message>Compiling Shaders</Message>
-      <Command>C:\VulkanSDK\1.4.335.0\Bin\slangc.exe shaders/base.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o shaders/base.spv</Command>
-      <Outputs>shaders/base.spv</Outputs>
-      <Inputs>shaders/base.slang</Inputs>
+      <Command>$(VULKAN_SDK)\Bin\slangc.exe shaders/base.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o shaders/base.spv
+$(VULKAN_SDK)\Bin\slangc.exe shaders/compute.slang -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry simulate -o shaders/compute.spv</Command>
+      <Outputs>shaders/base.spv;shaders/compute.spv</Outputs>
+      <Inputs>shaders/base.slang;shaders/compute.slang</Inputs>
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -13,27 +13,25 @@
 
 struct Vertex
 {
-	glm::vec3 pos;
-	glm::vec3 normal;
-	glm::vec4 states;
-	glm::vec2 texCoord;
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec4 states;
 
-	static vk::VertexInputBindingDescription getBindingDescription()
-	{
-		return { 0, sizeof( Vertex ), vk::VertexInputRate::eVertex };
-	}
+    static vk::VertexInputBindingDescription getBindingDescription()
+    {
+        return { 0, sizeof( Vertex ), vk::VertexInputRate::eVertex };
+    }
 
-	static std::array<vk::VertexInputAttributeDescription, 4> getAttributeDescriptions()
-	{
-		return {
-			vk::VertexInputAttributeDescription( 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) ),
-			vk::VertexInputAttributeDescription( 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal) ),
-			vk::VertexInputAttributeDescription( 2, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, states) ),
-			vk::VertexInputAttributeDescription( 3, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord) )
-		};
-	}
+    static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        return {
+            vk::VertexInputAttributeDescription( 0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) ),
+            vk::VertexInputAttributeDescription( 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal) )
+        };
+    }
 };
 
+constexpr int seed = 0;
 constexpr float noiseFrequency = 0.001f;
 constexpr float heightScale = 250;
 constexpr uint32_t gridWidth = 2000;
@@ -42,169 +40,170 @@ constexpr uint32_t gridHeight = 2000;
 static_assert(gridWidth <= UINT32_MAX / gridHeight, "Too many vertices in grid");
 
 constexpr uint32_t numVertices = gridWidth * gridHeight;
+constexpr uint64_t numIndices = 6 * (gridWidth - 1) * (gridHeight - 1);
 
 static_assert(numVertices % 64 == 0, "Number of vertices is not divisible by 64");
 
 class App
 {
 public:
-	void run();
+    void run();
 
 private:
-	void initWindow();
-	void mainLoop();
-	void cleanup();
+    void initWindow();
+    void mainLoop();
+    void cleanup();
 
-	void generateMesh();
+    void generateMesh();
 
-	void processInputs();
+    void processInputs();
 
-	void initVulkan();
-	void createInstance();
-	void createSurface();
-	void pickPhysicalDevice();
-	void createLogicalDevice();
+    void initVulkan();
+    void createInstance();
+    void createSurface();
+    void pickPhysicalDevice();
+    void createLogicalDevice();
 
-	[[nodiscard]] vk::raii::ImageView createImageView( vk::raii::Image &image, vk::Format format, vk::ImageAspectFlags aspectFlags );
-	void createImageViews();
+    [[nodiscard]] vk::raii::ImageView createImageView( vk::raii::Image &image, vk::Format format, vk::ImageAspectFlags aspectFlags );
+    void createImageViews();
 
-	static uint32_t             chooseSwapMinImageCount( vk::SurfaceCapabilitiesKHR const &surfaceCapabilities );
-	static vk::SurfaceFormatKHR chooseSwapSurfaceFormat( const std::vector<vk::SurfaceFormatKHR> &availableFormats );
-	static vk::PresentModeKHR   chooseSwapPresentMode( const std::vector<vk::PresentModeKHR> &availablePresentModes );
-	vk::Extent2D                chooseSwapExtent( const vk::SurfaceCapabilitiesKHR &capabilities );
-	void createSwapChain();
+    static uint32_t             chooseSwapMinImageCount( vk::SurfaceCapabilitiesKHR const &surfaceCapabilities );
+    static vk::SurfaceFormatKHR chooseSwapSurfaceFormat( const std::vector<vk::SurfaceFormatKHR> &availableFormats );
+    static vk::PresentModeKHR   chooseSwapPresentMode( const std::vector<vk::PresentModeKHR> &availablePresentModes );
+    vk::Extent2D                chooseSwapExtent( const vk::SurfaceCapabilitiesKHR &capabilities );
+    void createSwapChain();
 
-	void createDescriptorSetLayout();
-	[[nodiscard]] vk::raii::ShaderModule createShaderModule( const std::vector<char> &code ) const;
-	void createGraphicsPipeline();
+    void createDescriptorSetLayout();
+    void createComputeDescriptorSetLayout();
+    [[nodiscard]] vk::raii::ShaderModule createShaderModule( const std::vector<char> &code ) const;
+    void createGraphicsPipeline();
+    void createComputePipeline();
 
-	void createBuffer( vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory );
-	void copyBuffer( vk::raii::Buffer &srcBuffer, vk::raii::Buffer &dstBuffer, vk::DeviceSize size );
-	[[nodiscard]] uint32_t findMemoryType( uint32_t typeFilter, vk::MemoryPropertyFlags properties );
+    void createBuffer( vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory );
+    void copyBuffer( vk::raii::Buffer &srcBuffer, vk::raii::Buffer &dstBuffer, vk::DeviceSize size );
+    [[nodiscard]] uint32_t findMemoryType( uint32_t typeFilter, vk::MemoryPropertyFlags properties );
 
-	void createTextureImage();
-	void createImage( uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image &image, vk::raii::DeviceMemory &imageMemory );
-	void transitionImageLayout( const vk::raii::Image &image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout );
-	void copyBufferToImage( const vk::raii::Buffer &buffer, vk::raii::Image &image, uint32_t width, uint32_t height );
-	[[nodiscard]] std::unique_ptr<vk::raii::CommandBuffer> beginSingleTimeCommands();
-	void endSingleTimeCommands( vk::raii::CommandBuffer &commandBuffer );
-	void createTextureImageView();
-	void createTextureSampler();
 
-	void createVertexBuffer();
-	void createIndexBuffer();
-	void createUniformBuffers();
+    void createStorageBuffers();
+    void createIndexBuffer();
+    void createUniformBuffers();
 
-	void createDescriptorPool();
-	void createDescriptorSets();
+    void createDescriptorPool();
+    void createDescriptorSets();
+    void createComputeDescriptorSets();
 
-	void createDepthResources();
+    void createImage( uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image &image, vk::raii::DeviceMemory &imageMemory );
+    void createDepthResources();
 
-	[[nodiscard]] vk::Format findSupportedFormat( const std::vector<vk::Format> &candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features );
-	[[nodiscard]] vk::Format findDepthFormat();
+    [[nodiscard]] vk::Format findSupportedFormat( const std::vector<vk::Format> &candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features );
+    [[nodiscard]] vk::Format findDepthFormat();
 
-	void createCommandPool();
-	void createCommandBuffers();
+    void createCommandPool();
+    void createCommandBuffers();
+    void createComputeCommandBuffers();
 
-	void recordCommandBuffer( uint32_t imageIndex );
-	void transitionImageLayout( vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::ImageAspectFlags imageAspectFlags );
+    void recordCommandBuffer( uint32_t imageIndex );
+    void recordComputeCommandBuffer();
+    void transitionImageLayout( vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::ImageAspectFlags imageAspectFlags );
 
-	void createSyncObjects();
+    void createSyncObjects();
 
-	void updateUniformBuffer( uint32_t currentImage );
-	void drawFrame();
+    void updateUniformBuffer( uint32_t currentImage );
+    void drawFrame();
 
-	void cleanupSwapChain();
-	void recreateSwapChain();
+    void cleanupSwapChain();
+    void recreateSwapChain();
 
-	static void framebufferResizeCallback( GLFWwindow *window, int width, int height );
+    static void framebufferResizeCallback( GLFWwindow *window, int width, int height );
 
-	void setupDebugMessenger();
-	static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
-		vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
-		vk::DebugUtilsMessageTypeFlagsEXT type,
-		const vk::DebugUtilsMessengerCallbackDataEXT *pCallbackData,
-		void * );
+    void setupDebugMessenger();
+    static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
+        vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+        vk::DebugUtilsMessageTypeFlagsEXT type,
+        const vk::DebugUtilsMessengerCallbackDataEXT *pCallbackData,
+        void * );
 
 private:
-	GLFWwindow *window = nullptr;
+    GLFWwindow *window = nullptr;
 
-	vk::raii::Context                    context;
-	vk::raii::Instance                   instance = nullptr;
-	vk::raii::DebugUtilsMessengerEXT     debugMessenger = nullptr;
+    vk::raii::Context                    context;
+    vk::raii::Instance                   instance = nullptr;
+    vk::raii::DebugUtilsMessengerEXT     debugMessenger = nullptr;
 
-	vk::raii::SurfaceKHR                 surface = nullptr;
+    vk::raii::SurfaceKHR                 surface = nullptr;
 
-	vk::raii::PhysicalDevice             physicalDevice = nullptr;
-	vk::raii::Device                     device = nullptr;
+    vk::raii::PhysicalDevice             physicalDevice = nullptr;
+    vk::raii::Device                     device = nullptr;
 
-	uint32_t                             queueIndex = ~0;
-	vk::raii::Queue                      queue = nullptr;
-	vk::raii::SwapchainKHR               swapChain = nullptr;
-	std::vector<vk::Image>               swapChainImages;
-	vk::SurfaceFormatKHR                 swapChainSurfaceFormat;
-	vk::Extent2D                         swapChainExtent;
-	std::vector<vk::raii::ImageView>     swapChainImageViews;
+    uint32_t                             queueIndex = ~0;
+    vk::raii::Queue                      queue = nullptr;
+    vk::raii::SwapchainKHR               swapChain = nullptr;
+    std::vector<vk::Image>               swapChainImages;
+    vk::SurfaceFormatKHR                 swapChainSurfaceFormat;
+    vk::Extent2D                         swapChainExtent;
+    std::vector<vk::raii::ImageView>     swapChainImageViews;
 
-	vk::raii::DescriptorSetLayout        descriptorSetLayout = nullptr;
-	vk::raii::PipelineLayout             pipelineLayout = nullptr;
-	vk::raii::Pipeline		             graphicsPipeline = nullptr;
+    vk::raii::DescriptorSetLayout        descriptorSetLayout = nullptr;
+    vk::raii::DescriptorSetLayout        computeDescriptorSetLayout = nullptr;
+    vk::raii::PipelineLayout             pipelineLayout = nullptr;
+    vk::raii::PipelineLayout             computePipelineLayout = nullptr;
+    vk::raii::Pipeline		             graphicsPipeline = nullptr;
+    vk::raii::Pipeline                   computePipeline = nullptr;
 
-	vk::raii::Image                      textureImage = nullptr;
-	vk::raii::DeviceMemory               textureImageMemory = nullptr;
-	vk::raii::ImageView                  textureImageView = nullptr;
-	vk::raii::Sampler                    textureSampler = nullptr;
+    vk::raii::Image                      depthImage = nullptr;
+    vk::raii::DeviceMemory               depthImageMemory = nullptr;
+    vk::raii::ImageView                  depthImageView = nullptr;
 
-	vk::raii::Image                      depthImage = nullptr;
-	vk::raii::DeviceMemory               depthImageMemory = nullptr;
-	vk::raii::ImageView                  depthImageView = nullptr;
+    vk::raii::Buffer                     indexBuffer = nullptr;
+    vk::raii::DeviceMemory               indexBufferMemory = nullptr;
 
-	vk::raii::Buffer                     vertexBuffer = nullptr;
-	vk::raii::DeviceMemory               vertexBufferMemory = nullptr;
-	vk::raii::Buffer                     indexBuffer = nullptr;
-	vk::raii::DeviceMemory               indexBufferMemory = nullptr;
+    vk::raii::Buffer                     dimensionsBuffer = nullptr;
+    vk::raii::DeviceMemory               dimensionsBufferMemory = nullptr;
 
-	std::vector<vk::raii::Buffer>        uniformBuffers;
-	std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
-	std::vector<void *>                  uniformBuffersMapped;
+    std::vector<vk::raii::Buffer>        uniformBuffers;
+    std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
+    std::vector<void *>                  uniformBuffersMapped;
 
-	vk::raii::DescriptorPool             descriptorPool = nullptr;
-	std::vector<vk::raii::DescriptorSet> descriptorSets;
+    std::vector<vk::raii::Buffer>        shaderStorageBuffers;
+    std::vector<vk::raii::DeviceMemory>  shaderStorageBuffersMemory;
 
-	vk::raii::CommandPool                commandPool = nullptr;
-	std::vector<vk::raii::CommandBuffer> commandBuffers;
+    vk::raii::DescriptorPool             descriptorPool = nullptr;
+    std::vector<vk::raii::DescriptorSet> descriptorSets;
+    std::vector<vk::raii::DescriptorSet> computeDescriptorSets;
 
-	std::vector<vk::raii::Semaphore>     presentCompleteSemaphores;
-	std::vector<vk::raii::Semaphore>     renderFinishedSemaphores;
-	std::vector<vk::raii::Fence>         inFlightFences;
+    vk::raii::CommandPool                commandPool = nullptr;
+    std::vector<vk::raii::CommandBuffer> commandBuffers;
+    std::vector<vk::raii::CommandBuffer> computeCommandBuffers;
 
-	uint32_t                             semaphoreIndex = 0;
-	uint32_t                             currentFrame = 0;
+    vk::raii::Semaphore                  semaphore = nullptr;
+    uint64_t						     timelineValue = 0;
+    std::vector<vk::raii::Fence>         inFlightFences;
+    uint32_t                             currentFrame = 0;
 
-	bool framebufferResized = false;
+    bool framebufferResized = false;
 
-	std::vector<const char *> requiredDeviceExtensions = {
-		vk::KHRSwapchainExtensionName,
-		vk::KHRSpirv14ExtensionName,
-		vk::KHRSynchronization2ExtensionName,
-		vk::KHRCreateRenderpass2ExtensionName
-	};
+    std::vector<const char *> requiredDeviceExtensions = {
+        vk::KHRSwapchainExtensionName,
+        vk::KHRSpirv14ExtensionName,
+        vk::KHRSynchronization2ExtensionName,
+        vk::KHRCreateRenderpass2ExtensionName
+    };
 
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
+    Vertex   *vertices = nullptr;
+    uint32_t *indices = nullptr;
 
 public:
-	glm::vec3 cameraPosition = {0, 0, 40};
-	glm::vec3 cameraDirection = {-0.5f, -0.5f, -0.5f};
-	float speed = 5;
-	float mouseSensitivity = 1;
+    glm::vec3 cameraPosition = {0, 0, 40};
+    glm::vec3 cameraDirection = {-0.5f, -0.5f, -0.5f};
+    float speed = 5;
+    float mouseSensitivity = 1;
 
-	float prevTime = 0;
-	float time = 0;
-	float deltaTime = 0;
+    float prevTime = 0;
+    float time = 0;
+    float deltaTime = 0;
 
-	glm::vec2 prevCursorPos = { 0, 0 };
-	glm::vec2 cursorPos = { 0, 0 };
-	glm::vec2 cursorPosDelta = { 0, 0 };
+    glm::vec2 prevCursorPos = { 0, 0 };
+    glm::vec2 cursorPos = { 0, 0 };
+    glm::vec2 cursorPosDelta = { 0, 0 };
 };
 
