@@ -34,8 +34,8 @@ struct Vertex
 constexpr int seed = 0;
 constexpr float noiseFrequency = 0.001f;
 constexpr float heightScale = 250;
-constexpr uint32_t gridWidth = 2000;
-constexpr uint32_t gridHeight = 2000;
+constexpr uint32_t gridWidth = 104;
+constexpr uint32_t gridHeight = 104;
 
 static_assert(gridWidth <= UINT32_MAX / gridHeight, "Too many vertices in grid");
 

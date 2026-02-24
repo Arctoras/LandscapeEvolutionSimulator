@@ -20,6 +20,10 @@ RWStructuredBuffer<VertexSSBO> verticesOut;
 [numthreads(64,1,1)]
 void simulate(uint3 threadId : SV_DispatchThreadID)
 {
+    // With gridWidth = gridHeight = 104, indices greater than 9555 cause the device lost issue when simply copying the buffer
+    // if (threadId.x >= 9556) return;
+    // verticesOut[threadId.x] = verticesIn[threadId.x];
+
     // Simulation Parameters:
     float r = 2;    // amount of rain per pixel
     float m = 0.2;  // water erosion exponent
@@ -27,10 +31,10 @@ void simulate(uint3 threadId : SV_DispatchThreadID)
     float c = 1;    // creep speed
     float p = 0.1;  // landscape erosion proportion
     float u = 0;    // uplift
-    float dt = 1;    // timestep
+    float dt = 0;    // timestep
 
     uint index = threadId.x;
-    uint2 coord = uint2(index % dim.width, index / dim.height);
+    uint2 coord = uint2(index % dim.height, index / dim.width);
 
     VertexSSBO here = verticesIn[coord.y * dim.width + coord.x];
 
@@ -60,10 +64,14 @@ void simulate(uint3 threadId : SV_DispatchThreadID)
     float dh = c * laplacians.x - e * pow(here.vertices.states.y, m) * pow(length(float2(gradX.x, gradY.y)), m * 2) + u; // Change in bedrock height with respect to time
     float dw = here.vertices.states.y * (gradPX.y + gradNX.y + gradPY.y + gradNY.y);                                     // Change in water depth with respect to time
 
-    verticesOut[index].vertices.states = here.vertices.states + dt * float4(dh, dw, 0.0, 0.0);
-    verticesOut[index].vertices.pos = float3(here.vertices.pos.xy, verticesOut[index].vertices.states.x);
+    float4 newStates = here.vertices.states + dt * float4(dh, dw, 0.0, 0.0);
+    float3 newPos = float3(here.vertices.pos.xy, newStates.x);
 
     // normals will always be 1 frame behind, because it would be really annoying to do otherwise, and it really doesn't matter
-    verticesOut[index].vertices.normal = cross(normalize(float3(-1, 0, nx.vertices.pos.z) - float3(1, 0, px.vertices.pos.z)),
-                   normalize(float3(0, -1, ny.vertices.pos.z) - float3(0, 1, py.vertices.pos.z)));
+    float3 newNormal = cross(normalize(float3(-1, 0, nx.vertices.pos.z) - float3(1, 0, px.vertices.pos.z)),
+                             normalize(float3(0, -1, ny.vertices.pos.z) - float3(0, 1, py.vertices.pos.z)));
+
+    if( index >= 0 ) return; // Currently any index causes an error when trying to write this result;
+
+    verticesOut[index] = VertexSSBO(Vertex(newPos, newNormal, newStates));
 }

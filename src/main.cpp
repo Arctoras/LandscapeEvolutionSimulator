@@ -7,7 +7,7 @@
 int main()
 {
 	freopen( "output.txt", "w", stdout );
-	freopen( "output.txt", "w", stderr );
+	freopen( "output.txt", "a", stderr );
 
 	App app;
 
