@@ -1,0 +1,99 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Simulate
+#pragma kernel Generate
+
+#include "Noise.cginc"
+
+#define PI 3.14159265359
+
+uint2 dim;
+float cellSizeSqr;
+
+Texture2D<float4> input;
+RWTexture2D<float4> result;
+
+// Simulation Parameters:
+float r = 2; // amount of rain per pixel
+float m = 0.2; // water erosion exponent
+float e = 0.1; // erosion speed
+float c = 1; // creep speed
+float p = 0.1; // landscape erosion proportion
+float u = 0; // uplift
+float dt = 0.01; // timestep
+
+[numthreads(8,8,1)]
+void Simulate (uint3 id : SV_DispatchThreadID)
+{
+    
+    uint2 coord = id.xy;
+    
+    float4 here = input[coord];
+    
+    // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
+    float4 px;
+    float4 nx;
+    float4 py;
+    float4 ny;
+    if (coord.x + 1 == dim.x) px = input[uint2(1, coord.y)];
+    else                      px = input[uint2(coord.x + 1, coord.y)];
+    if (coord.x == 0)         nx = input[uint2(dim.x - 2, coord.y)];
+    else                      nx = input[uint2(coord.x - 1, coord.y)];
+    if (coord.y + 1 == dim.y) py = input[uint2(coord.x, 1)];
+    else                      py = input[uint2(coord.x, coord.y + 1)];
+    if (coord.y == 0)         ny = input[uint2(coord.x, dim.y - 2)];
+    else                      ny = input[uint2(coord.x, coord.y - 1)];
+    
+    float4 laplacians = (px + nx + py + ny - 4 * here) / cellSizeSqr;
+    float4 gradX = (px - nx) / 2;
+    float4 gradY = (py - ny) / 2;
+
+    float4 gradPX = px - here;
+    float4 gradNX = nx - here;
+    float4 gradPY = py - here;
+    float4 gradNY = ny - here;
+
+    float dh = c * laplacians.x - e * pow(max(0,here.z), m) * pow(length(float2(gradX.x, gradY.x)), m * 2) + u; // Change in bedrock height with respect to time
+    float dw = r + here.z * (gradPX.z + gradNX.z + gradPY.z + gradNY.z); // Change in water depth with respect to time
+
+    float4 newState = here + dt * float4(dh, dw, 0.0, dw - r);
+    
+    result[coord] = float4(newState.x, max(0, newState.yzw));
+
+}
+
+
+uint octaves;
+float noiseScale;
+
+RWTexture2D<float4> genResult;
+float width;
+float height;
+float left;
+float bottom;
+
+[numthreads(8, 8, 1)]
+void Generate(uint3 id : SV_DispatchThreadID)
+{
+    uint2 coord = id.xy;
+    
+    float s = id.x / float(dim.x - 1);
+    float t = id.y / float(dim.y - 1);
+    
+    float nx = left + cos(s * 2 * PI) * width / (2 * PI);
+    float ny = bottom + cos(t * 2 * PI) * height / (2 * PI);
+    float nz = left + sin(s * 2 * PI) * width / (2 * PI);
+    float nw = bottom + sin(t * 2 * PI) * height / (2 * PI);
+    
+    float frequency = 1 / noiseScale;
+    float scale = 1;
+    
+    float sum = 0;
+    for (uint i = 0; i < octaves; i++)
+    {
+        sum += snoise(float4(nx, ny, nz, nw) * frequency) * scale;
+        scale *= 0.5;
+        frequency *= 2;
+    }
+    
+    genResult[coord] = float4(sum, 0, 0, 0.0);
+}

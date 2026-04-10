@@ -1,0 +1,42 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Tex
+
+uint2 dim;
+
+Texture2D<float4> stateTexture;
+RWTexture2D<float4> visTexture;
+
+float3 blend(float3 a, float3 b, float factor)
+{
+    return a * factor + b * (1 - factor);
+}
+
+[numthreads(8, 8, 1)]
+void Tex(uint3 id : SV_DispatchThreadID)
+{
+    float4 states = stateTexture[id.xy];
+    float3 colour = float3(0, 0, 0);
+    if (states.x < 0.3)
+    {
+        colour.g = 1 - max(0.0, min(1.0, states.x / 0.3));
+    }
+    if (states.x > 0.1)
+    {
+        colour.r = max(0.0, min(1.0, (states.x - 0.1) / 0.7));
+    }
+    if (states.x > 0.8)
+    {
+        float factor = min(1.0,(states.x - 0.8) * 5);
+        colour = blend(float3(1, 1, 1), colour, factor);
+    }
+    if (states.z > 0.1 && false)
+    {
+        float blueFactor = max(0.0, min(1.0, states.z * 2));
+        float blackFactor = max(0.0, min(1.0, 1 - ((states.z * 2) - 1)));
+        
+        colour = blend(float3(0, 0, blackFactor), colour, blueFactor);
+    }
+
+    visTexture[id.xy] = float4(colour, 1);
+}
+
