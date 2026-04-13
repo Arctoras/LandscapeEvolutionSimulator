@@ -7,7 +7,7 @@ public class TerrainSimulator : MonoBehaviour
     Vector2Int gridDimensions = new Vector2Int(256, 256);
     [SerializeField] uint octaves = 5;
     [SerializeField] float cellSize = 25;
-    [SerializeField] int seed = 0;
+    [SerializeField] Vector4 seed;
 
     // Simulation Parameters:
     [SerializeField] float rain = 2; // amount of rain per pixel
@@ -35,14 +35,10 @@ public class TerrainSimulator : MonoBehaviour
     Mesh[] meshes;
     RenderParams meshRenderParams;
 
-    System.Random rng;
-
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         FixGridDimensions();
-
-        rng = (seed == 0 ? new() : new(seed));
 
         InitTextures();
 
@@ -197,7 +193,10 @@ public class TerrainSimulator : MonoBehaviour
         simulator.SetFloat("noiseScale", 2500 / cellSize);
         simulator.SetFloat("width", gridDimensions.x - 1);
         simulator.SetFloat("height", gridDimensions.y - 1);
-        simulator.SetFloat("left", left + (float)rng.Next(Int16.MaxValue));
-        simulator.SetFloat("bottom", bottom + (float)rng.Next(Int16.MaxValue));
+        simulator.SetFloat("left", left);
+        simulator.SetFloat("bottom", bottom);
+
+        float[] seed = { this.seed.x, this.seed.y, this.seed.z, this.seed.w };
+        simulator.SetFloats("seed", seed);
     }
 }

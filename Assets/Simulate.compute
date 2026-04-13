@@ -58,7 +58,6 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float4 newState = here + dt * float4(dh, dw, 0.0, dw - r);
     
     result[coord] = float4(newState.x, max(0, newState.yzw));
-
 }
 
 
@@ -70,6 +69,7 @@ float width;
 float height;
 float left;
 float bottom;
+float4 seed;
 
 [numthreads(8, 8, 1)]
 void Generate(uint3 id : SV_DispatchThreadID)
@@ -79,10 +79,10 @@ void Generate(uint3 id : SV_DispatchThreadID)
     float s = id.x / float(dim.x - 1);
     float t = id.y / float(dim.y - 1);
     
-    float nx = left + cos(s * 2 * PI) * width / (2 * PI);
-    float ny = bottom + cos(t * 2 * PI) * height / (2 * PI);
-    float nz = left + sin(s * 2 * PI) * width / (2 * PI);
-    float nw = bottom + sin(t * 2 * PI) * height / (2 * PI);
+    float nx = seed[0] + left + cos(s * 2 * PI) * width / (2 * PI);
+    float ny = seed[1] + bottom + cos(t * 2 * PI) * height / (2 * PI);
+    float nz = seed[2] + left + sin(s * 2 * PI) * width / (2 * PI);
+    float nw = seed[3] + bottom + sin(t * 2 * PI) * height / (2 * PI);
     
     float frequency = 1 / noiseScale;
     float scale = 1;

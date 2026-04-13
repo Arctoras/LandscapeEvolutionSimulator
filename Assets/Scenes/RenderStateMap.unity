@@ -152,15 +152,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TerrainSimulator
   gridDimensions: {x: 2048, y: 2048}
-  octaves: 5
-  noiseScale: 100
+  octaves: 6
+  cellSize: 25
+  seed: 0
   rain: 2
   waterErosionExponent: 0.2
   erosionSpeed: 0.1
   creepSpeed: 1
   landscapeErosionStopProportion: 0.1
   uplift: 0
-  timestepLength: 0.01
+  timestepLength: 1
   simulator: {fileID: 7200000, guid: cd0fc3a4f6c5cc2439200403735ab6c6, type: 3}
   visualiser: {fileID: 7200000, guid: 026c330d27041244f8f140dbdbacb7bd, type: 3}
   targetMat: {fileID: 2100000, guid: 457b920acec131b43b97dfdb72c3df75, type: 2}
