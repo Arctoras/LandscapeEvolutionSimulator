@@ -1,4 +1,5 @@
 // Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Inter
 #pragma kernel Simulate
 #pragma kernel Generate
 
@@ -7,24 +8,33 @@
 #define PI 3.14159265359
 
 uint2 dim;
-float cellSizeSqr;
+float doubleCellSize;
 
 Texture2D<float4> input;
+RWTexture2D<float4> interResult;
+Texture2D<float4> interInput;
 RWTexture2D<float4> result;
 
 // Simulation Parameters:
-float r = 2; // amount of rain per pixel
-float m = 0.2; // water erosion exponent
-float e = 0.1; // erosion speed
-float c = 1; // creep speed
-float p = 0.1; // landscape erosion proportion
-float u = 0; // uplift
-float dt = 0.01; // timestep
+float u;   // uplift
+float c;   // creep speed
+float r;   // amount of rain per pixel
+float e0;  // bedrock erosion speed
+float e1;  // regolith erosion speed
+float m;   // water erosion exponent (water depth multiplier)
+float n;   // water erosion exponent (slope multiplier)
+float a;   // water transport exponent (water depth multiplier)
+float b;   // water transport exponent (slope multiplier)
+float s;   // sedimentation rate
+float w;   // weathering rate
+float p0;  // regolith protection exponent (protecting against bedrock erosion)
+float p1;  // regolith protection exponent (protecting against bedrock weathering)
+float dt;  // timestep
 
-[numthreads(8,8,1)]
-void Simulate (uint3 id : SV_DispatchThreadID)
+
+[numthreads(8, 8, 1)]
+void Inter(uint3 id : SV_DispatchThreadID)
 {
-    
     uint2 coord = id.xy;
     
     float4 here = input[coord];
@@ -43,21 +53,69 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     if (coord.y == 0)         ny = input[uint2(coord.x, dim.y - 2)];
     else                      ny = input[uint2(coord.x, coord.y - 1)];
     
-    float4 laplacians = (px + nx + py + ny - 4 * here) / cellSizeSqr;
-    float4 gradX = (px - nx) / 2;
-    float4 gradY = (py - ny) / 2;
-
-    float4 gradPX = px - here;
-    float4 gradNX = nx - here;
-    float4 gradPY = py - here;
-    float4 gradNY = ny - here;
-
-    float dh = c * laplacians.x - e * pow(max(0,here.z), m) * pow(length(float2(gradX.x, gradY.x)), m * 2) + u; // Change in bedrock height with respect to time
-    float dw = r + here.z * (gradPX.z + gradNX.z + gradPY.z + gradNY.z); // Change in water depth with respect to time
-
-    float4 newState = here + dt * float4(dh, dw, 0.0, dw - r);
+    float4 diffX = (px - nx);
+    float4 diffY = (py - ny);
     
-    result[coord] = float4(newState.x, max(0, newState.yzw));
+    float2 waterSurfaceGrad = float2(diffX.x + diffX.y + diffX.z, diffY.x + diffY.y + diffY.z) / doubleCellSize;
+    float waterSurfaceSlope = length(waterSurfaceGrad);
+    
+    float v = dot(1.f.xx, - pow(here.z, a) * waterSurfaceGrad * pow(waterSurfaceSlope, b)); // Water velocity (Components summed pre-emptively because only used for divergence)
+    
+    float2 waterTransport = float2(here.z * v, here.w * v); // water depth * velocity, tranported sediment * velocity
+    
+    float landHeightDivergence = (diffX.x + diffX.y + diffY.x + diffY.y) / doubleCellSize;
+    
+    interResult[coord] = float4(waterSurfaceSlope, landHeightDivergence, waterTransport);
+}
+
+
+[numthreads(8, 8, 1)]
+void Simulate (uint3 id : SV_DispatchThreadID)
+{
+    uint2 coord = id.xy;
+    
+    float4 here = input[coord];
+    
+    // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
+    float4 interHere = interInput[coord];
+    float4 px;
+    float4 nx;
+    float4 py;
+    float4 ny;
+    if (coord.x + 1 == dim.x) px = interInput[uint2(1, coord.y)];
+    else                      px = interInput[uint2(coord.x + 1, coord.y)];
+    if (coord.x == 0)         nx = interInput[uint2(dim.x - 2, coord.y)];
+    else                      nx = interInput[uint2(coord.x - 1, coord.y)];
+    if (coord.y + 1 == dim.y) py = interInput[uint2(coord.x, 1)];
+    else                      py = interInput[uint2(coord.x, coord.y + 1)];
+    if (coord.y == 0)         ny = interInput[uint2(coord.x, dim.y - 2)];
+    else                      ny = interInput[uint2(coord.x, coord.y - 1)];
+    
+    float4 diffX = (px - nx);
+    float4 diffY = (py - ny);
+    
+    float slope = interHere.x;
+    float landHeightLaplacian = (diffX.y + diffY.y) / doubleCellSize;
+    float2 waterTransportDivergence = (diffX.zw + diffY.zw) / doubleCellSize;
+    
+    float streamPower = pow(here.z, m) * pow(slope, n);
+    
+    float bedrockErosion = e0 * streamPower * exp(-here.y / p0);
+    float bedrockWeathering = w * exp(-here.y / p1);
+    
+    float regolithErosion = min(e1 * streamPower, here.y); // Can't erode more regolith than exists at this location
+    float regolithCreep = c * landHeightLaplacian;
+    
+    float sedimentation = s * here.w / here.z;
+    
+    float dw = r - waterTransportDivergence.x; // Change in water depth with respect to time
+    float dh = -bedrockErosion - bedrockWeathering + u; // Change in bedrock height with respect to time
+    float dp = regolithCreep - regolithErosion + bedrockWeathering + sedimentation; // Change in regolith thickness with respect to time
+    float dl = - waterTransportDivergence.y + bedrockErosion + regolithErosion - sedimentation; // Change in transported sediment with respect to time
+
+    float4 newState = here + dt * float4(dh, dp, dw, dl);
+    
+    result[coord] = float4(newState.x, max(0, newState.y), max(0, newState.z), max(0, newState.w)); // this max should never actually do anything unless something goes wrong
 }
 
 
@@ -74,8 +132,6 @@ float4 seed;
 [numthreads(8, 8, 1)]
 void Generate(uint3 id : SV_DispatchThreadID)
 {
-    uint2 coord = id.xy;
-    
     float s = id.x / float(dim.x - 1);
     float t = id.y / float(dim.y - 1);
     
@@ -95,5 +151,5 @@ void Generate(uint3 id : SV_DispatchThreadID)
         frequency *= 2;
     }
     
-    genResult[coord] = float4(sum, 0, 0, 0.0);
+    genResult[id.xy] = float4(sum, 0.1, max(0, -sum - 0.1), 0);
 }

@@ -1,70 +1,90 @@
 using System;
 using UnityEngine;
+using UnityEngine.Windows;
 
-public class TerrainSimulator : MonoBehaviour
+public class TerrainSimulator
 {
-    [SerializeField]
-    Vector2Int gridDimensions = new Vector2Int(256, 256);
-    [SerializeField] uint octaves = 5;
-    [SerializeField] float cellSize = 25;
-    [SerializeField] Vector4 seed;
-
-    // Simulation Parameters:
-    [SerializeField] float rain = 2; // amount of rain per pixel
-    [SerializeField] float waterErosionExponent = 0.2f; // water erosion exponent
-    [SerializeField] float erosionSpeed = 0.1f; // erosion speed
-    [SerializeField] float creepSpeed = 1; // creep speed
-    [SerializeField] float landscapeErosionStopProportion = 0.1f; // landscape erosion proportion
-    [SerializeField] float uplift = 0; // uplift
-    [SerializeField] float timestepLength = 1; // timestep
-
-    [SerializeReference] ComputeShader simulator;
-    [SerializeReference] ComputeShader visualiser;
-    [SerializeReference] Material targetMat;
-    [SerializeField] bool mesh = false;
+    ComputeShader simulator;
 
     bool readA = true;
-    RenderTexture texA;
-    RenderTexture texB;
-    RenderTexture texVis;
+    RenderTexture texA = null;
+    RenderTexture texB = null;
+    RenderTexture texInter = null;
+
+    public Texture states { get { return readA ? texA : texB; } }
 
     int generationKernel = -1;
-    int visualisationTextureKernel = -1;
     int simulationKernel = -1;
+    int simInterKernel = -1;
 
-    Mesh[] meshes;
-    RenderParams meshRenderParams;
+    private float[] simulationParameters = new float[14];
+    public float uplift { get { return simulationParameters[0]; } set { simulationParameters[0] = value; simulator.SetFloat("u", simulationParameters[0]); } }
+    public float creepSpeed { get { return simulationParameters[1]; } set { simulationParameters[1] = value; simulator.SetFloat("c", simulationParameters[1]); } }
+    public float rain { get { return simulationParameters[2]; } set { simulationParameters[2] = value; simulator.SetFloat("r", simulationParameters[2]); } } // amount of rain per pixel
+    public float bedrockErosionSpeed { get { return simulationParameters[3]; } set { simulationParameters[3] = value; simulator.SetFloat("e0", simulationParameters[3]); } }
+    public float regolithErosionSpeed { get { return simulationParameters[4]; } set { simulationParameters[4] = value; simulator.SetFloat("e1", simulationParameters[4]); } }
+    public float waterErosionExponent { get { return simulationParameters[5]; } set { simulationParameters[5] = value; simulator.SetFloat("m", simulationParameters[5]); } } // water depth multiplier
+    public float waterErosionExponent2 { get { return simulationParameters[6]; } set { simulationParameters[6] = value; simulator.SetFloat("n", simulationParameters[6]); } } // slope multiplier
+    public float waterTransportExponent { get { return simulationParameters[7]; } set { simulationParameters[7] = value; simulator.SetFloat("a", simulationParameters[7]); } } // water depth multiplier
+    public float waterTransportExponent2 { get { return simulationParameters[8]; } set { simulationParameters[8] = value; simulator.SetFloat("b", simulationParameters[8]); } } // slope multiplier
+    public float sedimentationRate { get { return simulationParameters[9]; } set { simulationParameters[9] = value; simulator.SetFloat("s", simulationParameters[9]); } }
+    public float weatheringRate { get { return simulationParameters[10]; } set { simulationParameters[10] = value; simulator.SetFloat("w", simulationParameters[10]); } }
+    public float regolithProtectionExponent { get { return simulationParameters[11]; } set { simulationParameters[11] = value; simulator.SetFloat("p0", simulationParameters[11]); } } // protecting against bedrock erosion (Cannot be 0)
+    public float regolithProtectionExponent2 { get { return simulationParameters[12]; } set { simulationParameters[12] = value; simulator.SetFloat("p1", simulationParameters[12]); } } // protecting against bedrock weathering (Cannot be 0)  
+    public float timestepLength { get { return simulationParameters[13]; } set { simulationParameters[13] = value; simulator.SetFloat("dt", simulationParameters[13]); } } // timestep
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    public TerrainSimulator(ComputeShader simulator)
     {
-        FixGridDimensions();
+        this.simulator = simulator;
 
-        InitTextures();
+        if (File.Exists("config/lastSimParams.data")) Load("config/lastSimParams.data");
+        else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
 
-        InitShaderParams();
-
-        GenerateSeedTexture();
-
+        uplift = 0;
+        creepSpeed = 1;
+        rain = 2;
+        bedrockErosionSpeed = 0.1f;
+        regolithErosionSpeed = 0.1f;
+        waterErosionExponent = 0.5f;
+        waterErosionExponent2 = 1;
+        waterTransportExponent = 0;
+        waterTransportExponent2 = 0;
+        sedimentationRate = 1;
+        weatheringRate = 0;
+        regolithProtectionExponent = 1; // Cannot be 0
+        regolithProtectionExponent2 = 1; // Cannot be 0
+        timestepLength = 1;
     }
 
-    private void OnDestroy()
+    public void OnDestroy()
     {
-        texA.Release();
-        texB.Release();
-        texVis.Release();
+        if(texA) texA.Release();
+        if(texB) texB.Release();
+        if(texInter) texInter.Release();
+
+        if (!Directory.Exists("config")) Directory.CreateDirectory("config");
+        Save("config/lastSimParams.data");
     }
 
-    // Update is called once per frame
-    void Update()
+    public void GenerateSeedTexture(Vector2Int gridDimensions, uint octaves, float cellSize, Vector4 seed)
     {
-        RunSimulationStep();
-        GenerateVisTexture();
-        readA = !readA;
-    }
+        int[] dim = { gridDimensions.x, gridDimensions.y };
+        simulator.SetInts("dim", dim);
+        simulator.SetFloat("doubleCellSize", cellSize * 2);
 
-    void GenerateSeedTexture()
-    {
+        float left = -((float)gridDimensions.x - 1) / 2;
+        float bottom = -((float)gridDimensions.y - 1) / 2;
+
+        simulator.SetInt("octaves", (int)octaves);
+        simulator.SetFloat("noiseScale", 2500 / cellSize);
+        simulator.SetFloat("width", gridDimensions.x - 1);
+        simulator.SetFloat("height", gridDimensions.y - 1);
+        simulator.SetFloat("left", left);
+        simulator.SetFloat("bottom", bottom);
+
+        float[] seedValues = { seed.x, seed.y, seed.z, seed.w };
+        simulator.SetFloats("seed", seedValues);
+
         if (generationKernel == -1)
         {
             generationKernel = simulator.FindKernel("Generate");
@@ -74,129 +94,75 @@ public class TerrainSimulator : MonoBehaviour
         simulator.Dispatch(generationKernel, gridDimensions.x / 8, gridDimensions.y / 8, 1);
     }
 
-    void GenerateVisTexture()
+    public void RunSimulationStep(Vector3Int threadGroups)
     {
-        if (visualisationTextureKernel == -1)
+        if (simInterKernel == -1)
         {
-            visualisationTextureKernel = visualiser.FindKernel("Tex");
-            visualiser.SetTexture(visualisationTextureKernel, "visTexture", texVis);
+            simInterKernel = simulator.FindKernel("Inter");
+            simulator.SetTexture(simInterKernel, "interResult", texInter);
         }
 
-        visualiser.SetTexture(visualisationTextureKernel, "stateTexture", readA ? texA : texB);
-        visualiser.Dispatch(visualisationTextureKernel, gridDimensions.x / 8, gridDimensions.y / 8, 1);
-    }
-
-    void RunSimulationStep()
-    {
         if (simulationKernel == -1)
         {
             simulationKernel = simulator.FindKernel("Simulate");
+            simulator.SetTexture(simulationKernel, "interInput", texInter);
         }
 
+        simulator.SetTexture(simInterKernel, "input", readA ? texA : texB);
         simulator.SetTexture(simulationKernel, "input", readA ? texA : texB);
         simulator.SetTexture(simulationKernel, "result", readA ? texB : texA);
-        simulator.Dispatch(simulationKernel, gridDimensions.x / 8, gridDimensions.y / 8, 1);
+
+        simulator.Dispatch(simInterKernel, threadGroups.x, threadGroups.y, threadGroups.z);
+        simulator.Dispatch(simulationKernel, threadGroups.x, threadGroups.y, threadGroups.z);
+
+        readA = !readA;
     }
 
-    void FixGridDimensions()
+
+    public void Init(Vector2Int gridDimensions)
     {
-        gridDimensions.x -= gridDimensions.x % 8;
-        gridDimensions.y -= gridDimensions.y % 8;
-        int numPoints = gridDimensions.x * gridDimensions.y;
-        int numTextures = 3;
-        int bytesPerPoint = numTextures * 4 * 4 + (mesh ? 8 * 4 : 0);
-        int numTris = 2 * (gridDimensions.x - 1) * (gridDimensions.y - 1);
-        int bytesPerTri = 3 * 4;
-        float roughMemoryUse = (float)numPoints * (float)bytesPerPoint + (float)(mesh ? numTris * bytesPerTri : 0);
-        if (roughMemoryUse >= ((float)int.MaxValue) * 2)
-        {
-            Debug.LogWarning("Grid will use roughly " + roughMemoryUse / 1000000000 + "GB of graphics memory. Shrinking.");
+        if (texA) texA.Release();
+        if (texB) texB.Release();
+        if (texInter) texInter.Release(); 
 
-            Vector2 prevGridSize = gridDimensions;
-
-            float aspectRatio = gridDimensions.y / gridDimensions.x;
-            float memoryUse = ((float)int.MaxValue) * 2;
-            if (mesh)
-            {
-                float height = (bytesPerTri + aspectRatio * bytesPerTri + Mathf.Sqrt(bytesPerTri * bytesPerTri * (1 + aspectRatio * aspectRatio - 2 * aspectRatio) + aspectRatio * (2 * bytesPerTri * (memoryUse - bytesPerPoint) + bytesPerPoint * memoryUse))) / (bytesPerPoint + 2 * bytesPerTri);
-                float width = height / aspectRatio;
-
-                int gridHeight = (int)height;
-                int gridWidth = (int)width;
-
-                gridDimensions.x = gridWidth - gridWidth % 8;
-                gridDimensions.y = gridHeight - gridHeight % 8;
-            }
-            else
-            {
-                float height = Mathf.Sqrt((memoryUse * aspectRatio) / bytesPerPoint);
-                float width = height / aspectRatio;
-
-                int gridHeight = (int)height;
-                int gridWidth = (int)width;
-
-                gridDimensions.x = gridWidth - gridWidth % 8;
-                gridDimensions.y = gridHeight - gridHeight % 8;
-            }
-
-            Debug.LogWarning("Gridsize changed from" + prevGridSize + " to " + gridDimensions);
-        }
-        else
-        {
-            if (roughMemoryUse > 1000000000) Debug.Log("Grid will use roughly " + roughMemoryUse / 1000000000 + "GB of graphics memory");
-            else if (roughMemoryUse > 1000000) Debug.Log("Grid will use roughly " + roughMemoryUse / 1000000 + "MB of graphics memory");
-        }
-        if (mesh)
-        {
-            gridDimensions.x -= gridDimensions.x % 128;
-            gridDimensions.y -= gridDimensions.y % 128;
-        }
-    }
-
-    void InitTextures()
-    {
         texA = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
         texA.enableRandomWrite = true;
         texA.Create();
         texB = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
         texB.enableRandomWrite = true;
         texB.Create();
-        texVis = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.sRGB);
-        texVis.enableRandomWrite = true;
-        texVis.Create();
-        texVis.wrapMode = TextureWrapMode.Repeat;
-        targetMat.SetTexture("_MainTex", texVis);
+        texInter = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+        texInter.enableRandomWrite = true;
+        texInter.Create();
     }
 
-    void InitShaderParams()
+
+    public void Load(string filePath)
     {
-        int[] dim = { gridDimensions.x, gridDimensions.y };
-        // Global variables
-        simulator.SetInts("dim", dim);
-        simulator.SetFloat("cellSizeSqr", cellSize * cellSize); 
-        visualiser.SetInts("dim", dim);
+        byte[] data = File.ReadAllBytes(filePath);
+        float[] values = new float[14];
+        Buffer.BlockCopy(data, 0, values, 0, values.Length);
 
-        // Simulation parameters
-        simulator.SetFloat("r", rain);
-        simulator.SetFloat("m", waterErosionExponent);
-        simulator.SetFloat("e", erosionSpeed);
-        simulator.SetFloat("c", creepSpeed);
-        simulator.SetFloat("p", landscapeErosionStopProportion);
-        simulator.SetFloat("u", uplift);
-        simulator.SetFloat("dt", timestepLength);
+        uplift = values[0];
+        creepSpeed = values[1];
+        rain = values[2];
+        bedrockErosionSpeed = values[3];
+        regolithErosionSpeed = values[4];
+        waterErosionExponent = values[5];
+        waterErosionExponent2 = values[6];
+        waterTransportExponent = values[7];
+        waterTransportExponent2 = values[8];
+        sedimentationRate = values[9];
+        weatheringRate = values[10];
+        regolithProtectionExponent = values[11];
+        regolithProtectionExponent2 = values[12];
+        timestepLength = values[13];
+    }
 
-        float left = -((float)gridDimensions.x - 1) / 2;
-        float bottom = -((float)gridDimensions.y - 1) / 2;
-
-        // Noise parameters
-        simulator.SetInt("octaves", (int)octaves);
-        simulator.SetFloat("noiseScale", 2500 / cellSize);
-        simulator.SetFloat("width", gridDimensions.x - 1);
-        simulator.SetFloat("height", gridDimensions.y - 1);
-        simulator.SetFloat("left", left);
-        simulator.SetFloat("bottom", bottom);
-
-        float[] seed = { this.seed.x, this.seed.y, this.seed.z, this.seed.w };
-        simulator.SetFloats("seed", seed);
+    public void Save(string filePath) 
+    {
+        byte[] data = new byte[14 * sizeof(float)];
+        Buffer.BlockCopy(simulationParameters,0,data,0, data.Length);
+        File.WriteAllBytes(filePath, data);
     }
 }
