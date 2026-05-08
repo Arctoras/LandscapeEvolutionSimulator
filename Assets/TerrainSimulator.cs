@@ -40,20 +40,7 @@ public class TerrainSimulator
         if (File.Exists("config/lastSimParams.data")) Load("config/lastSimParams.data");
         else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
 
-        uplift = 0;
-        creepSpeed = 1;
-        rain = 2;
-        bedrockErosionSpeed = 0.1f;
-        regolithErosionSpeed = 0.1f;
-        waterErosionExponent = 0.5f;
-        waterErosionExponent2 = 1;
-        waterTransportExponent = 0;
-        waterTransportExponent2 = 0;
-        sedimentationRate = 1;
-        weatheringRate = 0;
-        regolithProtectionExponent = 1; // Cannot be 0
-        regolithProtectionExponent2 = 1; // Cannot be 0
-        timestepLength = 1;
+        timestepLength = 0.01f;
     }
 
     public void OnDestroy()
@@ -66,19 +53,19 @@ public class TerrainSimulator
         Save("config/lastSimParams.data");
     }
 
-    public void GenerateSeedTexture(Vector2Int gridDimensions, uint octaves, float cellSize, Vector4 seed)
+    public void GenerateSeedTexture(uint octaves, float cellSize, Vector4 seed)
     {
-        int[] dim = { gridDimensions.x, gridDimensions.y };
+        int[] dim = { texA.width, texA.height };
         simulator.SetInts("dim", dim);
         simulator.SetFloat("doubleCellSize", cellSize * 2);
 
-        float left = -((float)gridDimensions.x - 1) / 2;
-        float bottom = -((float)gridDimensions.y - 1) / 2;
+        float left = -((float)texA.width - 1) / 2;
+        float bottom = -((float)texA.height - 1) / 2;
 
         simulator.SetInt("octaves", (int)octaves);
         simulator.SetFloat("noiseScale", 2500 / cellSize);
-        simulator.SetFloat("width", gridDimensions.x - 1);
-        simulator.SetFloat("height", gridDimensions.y - 1);
+        simulator.SetFloat("width", texA.width - 1);
+        simulator.SetFloat("height", texA.height - 1);
         simulator.SetFloat("left", left);
         simulator.SetFloat("bottom", bottom);
 
@@ -91,7 +78,7 @@ public class TerrainSimulator
         }
 
         simulator.SetTexture(generationKernel, "genResult", readA ? texA : texB);
-        simulator.Dispatch(generationKernel, gridDimensions.x / 8, gridDimensions.y / 8, 1);
+        simulator.Dispatch(generationKernel, texA.width / 8, texA.height / 8, 1);
     }
 
     public void RunSimulationStep(Vector3Int threadGroups)
@@ -121,18 +108,42 @@ public class TerrainSimulator
 
     public void Init(Vector2Int gridDimensions)
     {
-        if (texA) texA.Release();
-        if (texB) texB.Release();
-        if (texInter) texInter.Release(); 
+        if (texA != null)
+        {
+            texA.Release();
+            texA.width = gridDimensions.x;
+            texA.height = gridDimensions.y;
+        }
+        else
+        {
+            texA = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            texA.enableRandomWrite = true;
+        }
+        if (texB != null)
+        {
+            texB.Release();
+            texB.width = gridDimensions.x;
+            texB.height = gridDimensions.y;
+        }
+        else
+        {
+            texB = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            texB.enableRandomWrite = true;
+        }
+        if (texInter != null)
+        {
+            texInter.Release();
+            texInter.width = gridDimensions.x;
+            texInter.height = gridDimensions.y;
+        }
+        else
+        {
+            texInter = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            texInter.enableRandomWrite = true;
+        }
 
-        texA = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-        texA.enableRandomWrite = true;
         texA.Create();
-        texB = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-        texB.enableRandomWrite = true;
         texB.Create();
-        texInter = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-        texInter.enableRandomWrite = true;
         texInter.Create();
     }
 

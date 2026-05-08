@@ -595,8 +595,12 @@ MonoBehaviour:
   colourThresholdsWater:
   - value: 0
     colour: {r: 0, g: 1, b: 1, a: 0}
+  - value: 0.01
+    colour: {r: 0, g: 1, b: 1, a: 0.49019608}
   - value: 1
-    colour: {r: 0, g: 0.2390244, b: 1, a: 0.7372549}
+    colour: {r: 0, g: 0.2390244, b: 1, a: 0.78431374}
+  - value: 2
+    colour: {r: 0, g: 0.0017135879, b: 0.084905684, a: 0.9019608}
 --- !u!1 &73976780
 GameObject:
   m_ObjectHideFlags: 0
@@ -2995,7 +2999,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 201698047}
         m_TargetAssemblyTypeName: Menu, Assembly-CSharp
-        m_MethodName: set_cellSize
+        m_MethodName: set_timestepLength
         m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -5172,7 +5176,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 60961623}
         m_TargetAssemblyTypeName: SimulationController, Assembly-CSharp
-        m_MethodName: StartSimulation
+        m_MethodName: RestartSimulation
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

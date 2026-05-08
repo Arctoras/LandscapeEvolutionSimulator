@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 public class SimulationController : MonoBehaviour
 {
@@ -36,7 +35,7 @@ public class SimulationController : MonoBehaviour
         visualiser = new TerrainVisualiser(visualisationShader, visualisationMaterial);
         simulator = new TerrainSimulator(simulationShader);
 
-        visualiser.SetThresholds(new List<ColourThreshold>[] { colourThresholdsBedrock, colourThresholdsRegolith, colourThresholdsWater });
+        visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsRegolith, colourThresholdsWater);
 
         SetGridDimensions(new Vector2Int(1024, 1024));
         octaves = 5;
@@ -49,13 +48,13 @@ public class SimulationController : MonoBehaviour
     {
         if (genSeed)
         {
-            simulator.GenerateSeedTexture(gridDimensions, octaves, cellSize, seed);
+            simulator.GenerateSeedTexture(octaves, cellSize, seed);
             visualiser.GenerateVisTexture(simulator.states, threadGroups);
             genSeed = false;
         }
         if (restartSim)
         {
-            simulator.GenerateSeedTexture(gridDimensions, octaves, cellSize, seed);
+            simulator.GenerateSeedTexture(octaves, cellSize, seed);
             if(targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             steps = 0;
             restartSim = false;
@@ -74,13 +73,13 @@ public class SimulationController : MonoBehaviour
         visualiser.OnDestroy();
     }
 
-    public void StartSimulation()
+    public void RestartSimulation()
     {
         restartSim = true;
     }
     public void SetTargetSteps(int newTarget)
     {
-        if (steps > newTarget) StartSimulation();
+        if (steps > newTarget) RestartSimulation();
         targetSteps = newTarget;
     }
 

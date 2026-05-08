@@ -3,7 +3,9 @@
 
 uint2 dim;
 
-int numThresholds[3];
+int bedrockThresholds;
+int regolithThresholds;
+int waterThresholds;
 StructuredBuffer<float> thresholds;
 StructuredBuffer<float4> colours;
 
@@ -12,45 +14,45 @@ RWTexture2D<float4> visTexture;
 
 float4 stack(float4 below, float4 above)
 {
-    if(below.a == 0) return above;
+    if(below.a == 0 || above.a == 1) return above;
     if(above.a == 0) return below;
     
     return float4(above.rgb * above.a + below.rgb * (1 - above.a), above.a + (1 - above.a) * below.a);
+}
+
+float4 sampleThreshold(int first, int last, float value)
+{
+    if (!(value < 0.f || value > 0.f || value == 0.f)) return float4(1, 0, 1, 1); // Value is NaN -> Pink
+    else if (isinf(value)) return float4(1, 0, 0, 1); // Value is infinite -> Red
+    
+    float curr = thresholds[first];
+    if (value <= curr) return colours[first];
+    else
+    {
+        for (int i = first; i < last; i++)
+        {
+            float next = thresholds[i + 1];
+            if (curr < value && value <= next)
+            {
+                return lerp(colours[i], colours[i + 1], (value - curr) / (next - curr));
+            }
+            curr = next;
+        }
+    }
+    return colours[last];
 }
 
 [numthreads(8, 8, 1)]
 void Tex(uint3 id : SV_DispatchThreadID)
 {
     float4 states = stateTexture[id.xy];
-    float4 colour = float4(0, 0, 0, 0);
+    float4 colour = float4(1, 1, 0, 0); // No valid thresholds -> Yellow
     int first = 0;
-    for(int t = 0; t < 3; t++)
-    {
-        if (numThresholds[t] > 0)
-        {
-            float value = (t == 0) ? states.x : (t == 1) ? states.y : states.z;
-            if (!(value < 0.f || value > 0.f || value == 0.f)) colour = float4(1, 0, 1, 1); // Value is NaN -> Pink
-            else if (isinf(value)) colour = float4(1, 0, 0, 1); // Value is infinite -> Red
-            
-            float curr = thresholds[first];
-            if (value < curr) colour = colours[first];
-            else if (value > thresholds[first + numThresholds[t] - 1]) colour = colours[first + numThresholds[t] - 1];
-            else
-            {
-                for (int i = first; i - first < numThresholds[t] - 1; i++)
-                {
-                    float next = thresholds[i + 1];
-                    if (curr < value && value < next)
-                    {
-                        colour = stack(colour, lerp(colours[i], colours[i + 1], (value - curr) / (next - curr)));
-                        break;
-                    }
-                    curr = next;
-                }
-            }
-            first += numThresholds[t];
-        }
-    }
+    colour = sampleThreshold(first, first + bedrockThresholds - 1, states.x); // Bedrock
+    first += bedrockThresholds;
+    colour = stack(colour, sampleThreshold(first, first + regolithThresholds - 1, states.y)); // Regolith
+    first += regolithThresholds;
+    colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.z)); // Water
     
     colour.a = 1;
     
