@@ -105,4 +105,14 @@ public class Menu : MonoBehaviour
             }
         }
     }
+    public string timestepLength
+    {
+        set
+        {
+            if (float.TryParse(value, out float timestepLength))
+            {
+                
+            }
+        }
+    }
 }

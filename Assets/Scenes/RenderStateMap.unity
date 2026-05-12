@@ -577,15 +577,15 @@ MonoBehaviour:
   visualisationShader: {fileID: 7200000, guid: 026c330d27041244f8f140dbdbacb7bd, type: 3}
   visualisationMaterial: {fileID: 2100000, guid: 457b920acec131b43b97dfdb72c3df75, type: 2}
   colourThresholdsBedrock:
-  - value: -2
+  - value: -10
     colour: {r: 0, g: 0, b: 0, a: 1}
   - value: 0
     colour: {r: 0.8113208, g: 0.7811322, b: 0.4554112, a: 1}
-  - value: 0.1
-    colour: {r: 0.028034883, g: 0.3962264, b: 0.028034905, a: 1}
   - value: 1
+    colour: {r: 0.028034883, g: 0.3962264, b: 0.028034905, a: 1}
+  - value: 10
     colour: {r: 0.2830189, g: 0.2830189, b: 0.2830189, a: 1}
-  - value: 2
+  - value: 20
     colour: {r: 1, g: 1, b: 1, a: 1}
   colourThresholdsRegolith:
   - value: 0
@@ -597,9 +597,9 @@ MonoBehaviour:
     colour: {r: 0, g: 1, b: 1, a: 0}
   - value: 0.01
     colour: {r: 0, g: 1, b: 1, a: 0.49019608}
-  - value: 1
-    colour: {r: 0, g: 0.2390244, b: 1, a: 0.78431374}
   - value: 2
+    colour: {r: 0, g: 0.2390244, b: 1, a: 0.78431374}
+  - value: 20
     colour: {r: 0, g: 0.0017135879, b: 0.084905684, a: 0.9019608}
 --- !u!1 &73976780
 GameObject:

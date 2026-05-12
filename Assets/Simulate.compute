@@ -1,5 +1,4 @@
 // Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel Inter
 #pragma kernel Simulate
 #pragma kernel Generate
 
@@ -8,11 +7,10 @@
 #define PI 3.14159265359
 
 uint2 dim;
+float cellSize;
 float doubleCellSize;
 
 Texture2D<float4> input;
-RWTexture2D<float4> interResult;
-Texture2D<float4> interInput;
 RWTexture2D<float4> result;
 
 // Simulation Parameters:
@@ -23,8 +21,6 @@ float e0;  // bedrock erosion speed
 float e1;  // regolith erosion speed
 float m;   // water erosion exponent (water depth multiplier)
 float n;   // water erosion exponent (slope multiplier)
-float a;   // water transport exponent (water depth multiplier)
-float b;   // water transport exponent (slope multiplier)
 float s;   // sedimentation rate
 float w;   // weathering rate
 float p0;  // regolith protection exponent (protecting against bedrock erosion)
@@ -32,40 +28,19 @@ float p1;  // regolith protection exponent (protecting against bedrock weatherin
 float dt;  // timestep
 
 
-[numthreads(8, 8, 1)]
-void Inter(uint3 id : SV_DispatchThreadID)
+float4 sample5(uint2 coord, Texture2D<float4> tex, out float4 px, out float4 nx, out float4 py, out float4 ny)
 {
-    uint2 coord = id.xy;
-    
-    float4 here = input[coord];
-    
     // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
-    float4 px;
-    float4 nx;
-    float4 py;
-    float4 ny;
-    if (coord.x + 1 == dim.x) px = input[uint2(1, coord.y)];
-    else                      px = input[uint2(coord.x + 1, coord.y)];
-    if (coord.x == 0)         nx = input[uint2(dim.x - 2, coord.y)];
-    else                      nx = input[uint2(coord.x - 1, coord.y)];
-    if (coord.y + 1 == dim.y) py = input[uint2(coord.x, 1)];
-    else                      py = input[uint2(coord.x, coord.y + 1)];
-    if (coord.y == 0)         ny = input[uint2(coord.x, dim.y - 2)];
-    else                      ny = input[uint2(coord.x, coord.y - 1)];
+    if (coord.x + 1 == dim.x) px = tex[uint2(1, coord.y)];
+    else                      px = tex[uint2(coord.x + 1, coord.y)];
+    if (coord.x == 0)         nx = tex[uint2(dim.x - 2, coord.y)];
+    else                      nx = tex[uint2(coord.x - 1, coord.y)];
+    if (coord.y + 1 == dim.y) py = tex[uint2(coord.x, 1)];
+    else                      py = tex[uint2(coord.x, coord.y + 1)];
+    if (coord.y == 0)         ny = tex[uint2(coord.x, dim.y - 2)];
+    else                      ny = tex[uint2(coord.x, coord.y - 1)];
     
-    float4 diffX = (px - nx);
-    float4 diffY = (py - ny);
-    
-    float2 waterSurfaceGrad = float2(diffX.x + diffX.y + diffX.z, diffY.x + diffY.y + diffY.z) / doubleCellSize;
-    float waterSurfaceSlope = length(waterSurfaceGrad);
-    
-    float v = dot(1.f.xx, - pow(here.z, a) * waterSurfaceGrad * pow(waterSurfaceSlope, b)); // Water velocity (Components summed pre-emptively because only used for divergence)
-    
-    float2 waterTransport = float2(here.z * v, here.w * v); // water depth * velocity, tranported sediment * velocity
-    
-    float landHeightDivergence = (diffX.x + diffX.y + diffY.x + diffY.y) / doubleCellSize;
-    
-    interResult[coord] = float4(waterSurfaceSlope, landHeightDivergence, waterTransport);
+    return tex[coord];
 }
 
 
@@ -74,44 +49,43 @@ void Simulate (uint3 id : SV_DispatchThreadID)
 {
     uint2 coord = id.xy;
     
-    float4 here = input[coord];
-    
-    // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
-    float4 interHere = interInput[coord];
     float4 px;
     float4 nx;
     float4 py;
     float4 ny;
-    if (coord.x + 1 == dim.x) px = interInput[uint2(1, coord.y)];
-    else                      px = interInput[uint2(coord.x + 1, coord.y)];
-    if (coord.x == 0)         nx = interInput[uint2(dim.x - 2, coord.y)];
-    else                      nx = interInput[uint2(coord.x - 1, coord.y)];
-    if (coord.y + 1 == dim.y) py = interInput[uint2(coord.x, 1)];
-    else                      py = interInput[uint2(coord.x, coord.y + 1)];
-    if (coord.y == 0)         ny = interInput[uint2(coord.x, dim.y - 2)];
-    else                      ny = interInput[uint2(coord.x, coord.y - 1)];
+    float4 here = sample5(coord, input, px, nx, py, ny);
     
-    float4 diffX = (px - nx);
-    float4 diffY = (py - ny);
+    float landHeightLaplacian = dot(1.f.xx, (px.xy + nx.xy + py.xy + ny.xy - 4 * here.xy)) / cellSize;
     
-    float slope = interHere.x;
-    float landHeightLaplacian = (diffX.y + diffY.y) / doubleCellSize;
-    float2 waterTransportDivergence = (diffX.zw + diffY.zw) / doubleCellSize;
+    float diffPx = dot(1.f.xxx, px.xyz - here.xyz);
+    float diffNx = dot(1.f.xxx, nx.xyz - here.xyz);
+    float diffPy = dot(1.f.xxx, py.xyz - here.xyz);
+    float diffNy = dot(1.f.xxx, ny.xyz - here.xyz);
     
-    float streamPower = pow(here.z, m) * pow(slope, n);
+    float waterFlow = (diffPx * (diffPx > 0 ? px.z : here.z) + // Positive -> flow in | Negative -> flow out
+                       diffNx * (diffNx > 0 ? nx.z : here.z) +
+                       diffPy * (diffPy > 0 ? py.z : here.z) +
+                       diffNy * (diffNy > 0 ? ny.z : here.z)) / cellSize;
+    float sedimentFlow = (diffPx * (diffPx > 0 ? px.w : here.w) + // Positive -> flow in | Negative -> flow out
+                          diffNx * (diffNx > 0 ? nx.w : here.w) +
+                          diffPy * (diffPy > 0 ? py.w : here.w) +
+                          diffNy * (diffNy > 0 ? ny.w : here.w)) / cellSize;
     
-    float bedrockErosion = e0 * streamPower * exp(-here.y / p0);
-    float bedrockWeathering = w * exp(-here.y / p1);
+    float waterSurfaceSlope = length(float2(diffPx - diffNx, diffPy - diffNy) / doubleCellSize); // Average gradient across point
+    float streamPower = here.z > 0 && waterSurfaceSlope > 0 ? pow(here.z, m) * pow(waterSurfaceSlope, n) : 0; // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
+    
+    float bedrockErosion = e0 * streamPower * exp(-here.y * p0);
+    float bedrockWeathering = w * exp(-here.y * p1);
     
     float regolithErosion = min(e1 * streamPower, here.y); // Can't erode more regolith than exists at this location
     float regolithCreep = c * landHeightLaplacian;
     
-    float sedimentation = s * here.w / here.z;
+    float sedimentation = here.z > 0 ? s * here.w / here.z : here.w;
     
-    float dw = r - waterTransportDivergence.x; // Change in water depth with respect to time
+    float dw = r + waterFlow; // Change in water depth with respect to time
     float dh = -bedrockErosion - bedrockWeathering + u; // Change in bedrock height with respect to time
     float dp = regolithCreep - regolithErosion + bedrockWeathering + sedimentation; // Change in regolith thickness with respect to time
-    float dl = - waterTransportDivergence.y + bedrockErosion + regolithErosion - sedimentation; // Change in transported sediment with respect to time
+    float dl = sedimentFlow + bedrockErosion + regolithErosion - sedimentation; // Change in transported sediment with respect to time
 
     float4 newState = here + dt * float4(dh, dp, dw, dl);
     
@@ -141,7 +115,7 @@ void Generate(uint3 id : SV_DispatchThreadID)
     float nw = seed[3] + bottom + sin(t * 2 * PI) * height / (2 * PI);
     
     float frequency = 1 / noiseScale;
-    float scale = 1;
+    float scale = 10;
     
     float sum = 0;
     for (uint i = 0; i < octaves; i++)
