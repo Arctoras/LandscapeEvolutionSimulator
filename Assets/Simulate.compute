@@ -17,30 +17,24 @@ RWTexture2D<float4> result;
 float u;   // uplift
 float c;   // creep speed
 float r;   // amount of rain per pixel
-float e0;  // bedrock erosion speed
-float e1;  // regolith erosion speed
+float e;   // bedrock erosion speed
 float m;   // water erosion exponent (water depth multiplier)
 float n;   // water erosion exponent (slope multiplier)
 float s;   // sedimentation rate
-float w;   // weathering rate
-float p0;  // regolith protection exponent (protecting against bedrock erosion)
-float p1;  // regolith protection exponent (protecting against bedrock weathering)
 float dt;  // timestep
 
 
-float4 sample5(uint2 coord, Texture2D<float4> tex, out float4 px, out float4 nx, out float4 py, out float4 ny)
+void sampleNeighbours(uint2 coord, out float4 px, out float4 nx, out float4 py, out float4 ny)
 {
     // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
-    if (coord.x + 1 == dim.x) px = tex[uint2(1, coord.y)];
-    else                      px = tex[uint2(coord.x + 1, coord.y)];
-    if (coord.x == 0)         nx = tex[uint2(dim.x - 2, coord.y)];
-    else                      nx = tex[uint2(coord.x - 1, coord.y)];
-    if (coord.y + 1 == dim.y) py = tex[uint2(coord.x, 1)];
-    else                      py = tex[uint2(coord.x, coord.y + 1)];
-    if (coord.y == 0)         ny = tex[uint2(coord.x, dim.y - 2)];
-    else                      ny = tex[uint2(coord.x, coord.y - 1)];
-    
-    return tex[coord];
+    if (coord.x + 1 == dim.x) px = input[uint2(1, coord.y)];
+    else                      px = input[uint2(coord.x + 1, coord.y)];
+    if (coord.x == 0)         nx = input[uint2(dim.x - 2, coord.y)];
+    else                      nx = input[uint2(coord.x - 1, coord.y)];
+    if (coord.y + 1 == dim.y) py = input[uint2(coord.x, 1)];
+    else                      py = input[uint2(coord.x, coord.y + 1)];
+    if (coord.y == 0)         ny = input[uint2(coord.x, dim.y - 2)];
+    else                      ny = input[uint2(coord.x, coord.y - 1)];
 }
 
 
@@ -49,47 +43,116 @@ void Simulate (uint3 id : SV_DispatchThreadID)
 {
     uint2 coord = id.xy;
     
+    float4 here = input[coord];
     float4 px;
     float4 nx;
     float4 py;
     float4 ny;
-    float4 here = sample5(coord, input, px, nx, py, ny);
+    sampleNeighbours(coord, px, nx, py, ny);
     
-    float landHeightLaplacian = dot(1.f.xx, (px.xy + nx.xy + py.xy + ny.xy - 4 * here.xy)) / cellSize;
+    float landHeightLaplacian = (px.x + nx.x + py.x + ny.x - 4 * here.x) / cellSize;
     
-    float diffPx = dot(1.f.xxx, px.xyz - here.xyz);
-    float diffNx = dot(1.f.xxx, nx.xyz - here.xyz);
-    float diffPy = dot(1.f.xxx, py.xyz - here.xyz);
-    float diffNy = dot(1.f.xxx, ny.xyz - here.xyz);
+    float waterHeight = here.x + here.y;
+    float pxWaterHeight = px.x + px.y;
+    float nxWaterHeight = nx.x + nx.y;
+    float pyWaterHeight = py.x + py.y;
+    float nyWaterHeight = ny.x + ny.y;
+    float diffPx = pxWaterHeight - waterHeight;
+    float diffNx = nxWaterHeight - waterHeight;
+    float diffPy = pyWaterHeight - waterHeight;
+    float diffNy = nyWaterHeight - waterHeight;
     
-    float waterFlow = (diffPx * (diffPx > 0 ? px.z : here.z) + // Positive -> flow in | Negative -> flow out
-                       diffNx * (diffNx > 0 ? nx.z : here.z) +
-                       diffPy * (diffPy > 0 ? py.z : here.z) +
-                       diffNy * (diffNy > 0 ? ny.z : here.z)) / cellSize;
-    float sedimentFlow = (diffPx * (diffPx > 0 ? px.w : here.w) + // Positive -> flow in | Negative -> flow out
-                          diffNx * (diffNx > 0 ? nx.w : here.w) +
-                          diffPy * (diffPy > 0 ? py.w : here.w) +
-                          diffNy * (diffNy > 0 ? ny.w : here.w)) / cellSize;
+    int routesOut = 0;
+    float2 pxFlow;
+    if (diffPx > 0)
+    {
+        float4 px2;
+        float4 nx2; // here
+        float4 py2;
+        float4 ny2;
+        if (coord.x + 1 == dim.x) sampleNeighbours(uint2(1, coord.y), px2, nx2, py2, ny2);
+        else                      sampleNeighbours(uint2(coord.x + 1, coord.y), px2, nx2, py2, ny2);
+        int routesOut2 = 1 + (px2.x + px2.y > pxWaterHeight ? 0 : 1) + (py2.x + py2.y > pxWaterHeight ? 0 : 1) + (ny2.x + ny2.y > pxWaterHeight ? 0 : 1);
+        pxFlow = px.yz / routesOut2;
+    }
+    else
+    {
+        routesOut++;
+    }
+    float2 nxFlow;
+    if (diffNx > 0)
+    {
+        float4 px2; // here
+        float4 nx2; 
+        float4 py2;
+        float4 ny2;
+        if (coord.x == 0) sampleNeighbours(uint2(dim.x - 2, coord.y), px2, nx2, py2, ny2);
+        else              sampleNeighbours(uint2(coord.x - 1, coord.y), px2, nx2, py2, ny2);
+        int routesOut2 = 1 + (nx2.x + nx2.y > nxWaterHeight ? 0 : 1) + (py2.x + py2.y > nxWaterHeight ? 0 : 1) + (ny2.x + ny2.y > nxWaterHeight ? 0 : 1);
+        nxFlow = nx.yz / routesOut2;
+    }
+    else
+    {
+        routesOut++;
+    }
+    float2 pyFlow;
+    if (diffPy > 0)
+    {
+        float4 px2;
+        float4 nx2; 
+        float4 py2;
+        float4 ny2; // here
+        if (coord.y + 1 == dim.y) sampleNeighbours(uint2(coord.x, 1), px2, nx2, py2, ny2);
+        else                      sampleNeighbours(uint2(coord.x, coord.y + 1), px2, nx2, py2, ny2);
+        int routesOut2 = 1 + (px2.x + px2.y > pyWaterHeight ? 0 : 1) + (nx2.x + nx2.y > nyWaterHeight ? 0 : 1) + (py2.x + py2.y > pyWaterHeight ? 0 : 1);
+        pyFlow = py.yz / routesOut2;
+    }
+    else
+    {
+        routesOut++;
+    }
+    float2 nyFlow;
+    if (diffNy > 0)
+    {
+        float4 px2;
+        float4 nx2; 
+        float4 py2; // here
+        float4 ny2;
+        if (coord.x == 0) sampleNeighbours(uint2(coord.x, dim.y - 2), px2, nx2, py2, ny2);
+        else              sampleNeighbours(uint2(coord.x, coord.y - 1), px2, nx2, py2, ny2);
+        int routesOut2 = 1 + (px2.x + px2.y > nyWaterHeight ? 0 : 1) + (nx2.x + nx2.y > nyWaterHeight ? 0 : 1) + (ny2.x + ny2.y > nyWaterHeight ? 0 : 1);
+        nyFlow = ny.yz / routesOut2;
+    }
+    else
+    {
+        routesOut++;
+    } 
+    float2 availableToFlowOut = here.yz / routesOut; // Avoid risk of creating water/sediment for each direction of flow
     
-    float waterSurfaceSlope = length(float2(diffPx - diffNx, diffPy - diffNy) / doubleCellSize); // Average gradient across point
-    float streamPower = here.z > 0 && waterSurfaceSlope > 0 ? pow(here.z, m) * pow(waterSurfaceSlope, n) : 0; // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
+    float waterFlow = (diffPx * (diffPx > 0 ? pxFlow.x : availableToFlowOut.x) + // Positive -> flow in | Negative -> flow out
+                       diffNx * (diffNx > 0 ? nxFlow.x : availableToFlowOut.x) +
+                       diffPy * (diffPy > 0 ? pyFlow.x : availableToFlowOut.x) +
+                       diffNy * (diffNy > 0 ? nyFlow.x : availableToFlowOut.x)) / cellSize;
+    float sedimentFlow = (diffPx * (diffPx > 0 ? pxFlow.y : availableToFlowOut.y) + // Positive -> flow in | Negative -> flow out
+                          diffNx * (diffNx > 0 ? nxFlow.y : availableToFlowOut.y) +
+                          diffPy * (diffPy > 0 ? pyFlow.y : availableToFlowOut.y) +
+                          diffNy * (diffNy > 0 ? nyFlow.y : availableToFlowOut.y)) / cellSize;
     
-    float bedrockErosion = e0 * streamPower * exp(-here.y * p0);
-    float bedrockWeathering = w * exp(-here.y * p1);
+    float waterSurfaceSlope = length(float2(diffPx - diffNx, diffPy - diffNy)) / doubleCellSize; // Average gradient across point
+    float streamPower = here.y > 0 && waterSurfaceSlope > 0 ? pow(here.y, m) * pow(waterSurfaceSlope, n) : 0; // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
     
-    float regolithErosion = min(e1 * streamPower, here.y); // Can't erode more regolith than exists at this location
-    float regolithCreep = c * landHeightLaplacian;
+    float erosion = e * streamPower;
+    float creep = c * landHeightLaplacian;
     
-    float sedimentation = here.z > 0 ? s * here.w / here.z : here.w;
+    float sedimentation = here.y > 0 ? min(s * min(here.z, here.z + sedimentFlow) / here.y, here.z + sedimentFlow) : min(here.z, here.z + sedimentFlow); // Sediment flow can be negative and so we need to avoid possibly creating sediment out of nothing
     
     float dw = r + waterFlow; // Change in water depth with respect to time
-    float dh = -bedrockErosion - bedrockWeathering + u; // Change in bedrock height with respect to time
-    float dp = regolithCreep - regolithErosion + bedrockWeathering + sedimentation; // Change in regolith thickness with respect to time
-    float dl = sedimentFlow + bedrockErosion + regolithErosion - sedimentation; // Change in transported sediment with respect to time
+    float dh = creep - erosion + u + sedimentation; // Change in bedrock height with respect to time
+    float dl = sedimentFlow + erosion - sedimentation; // Change in transported sediment with respect to time
 
-    float4 newState = here + dt * float4(dh, dp, dw, dl);
+    float4 newState = here + dt * float4(dh, dw, dl, 0);
     
-    result[coord] = float4(newState.x, max(0, newState.y), max(0, newState.z), max(0, newState.w)); // this max should never actually do anything unless something goes wrong
+    result[coord] = float4(newState.x, max(0, newState.y), max(0, newState.z), 0); // this max should never actually do anything unless something goes wrong
 }
 
 
@@ -125,5 +188,5 @@ void Generate(uint3 id : SV_DispatchThreadID)
         frequency *= 2;
     }
     
-    genResult[id.xy] = float4(sum, 0.1, max(0, -sum - 0.1), 0);
+    genResult[id.xy] = float4(sum, max(0.1, -sum), 0, 0);
 }

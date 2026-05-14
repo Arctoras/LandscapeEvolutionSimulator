@@ -26,7 +26,6 @@ public class SimulationController : MonoBehaviour
     int stepsPerRender = 1;
 
     public List<ColourThreshold> colourThresholdsBedrock;
-    public List<ColourThreshold> colourThresholdsRegolith;
     public List<ColourThreshold> colourThresholdsWater;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -35,7 +34,7 @@ public class SimulationController : MonoBehaviour
         visualiser = new TerrainVisualiser(visualisationShader, visualisationMaterial);
         simulator = new TerrainSimulator(simulationShader);
 
-        visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsRegolith, colourThresholdsWater);
+        visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsWater);
 
         SetGridDimensions(new Vector2Int(1024, 1024));
         octaves = 5;

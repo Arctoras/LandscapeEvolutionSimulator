@@ -15,19 +15,17 @@ public class TerrainSimulator
     int generationKernel = -1;
     int simulationKernel = -1;
 
-    private float[] simulationParameters = new float[12];
+    private float[] simulationParameters = new float[8];
     public float uplift { get { return simulationParameters[0]; } set { simulationParameters[0] = value; simulator.SetFloat("u", simulationParameters[0]); } }
     public float creepSpeed { get { return simulationParameters[1]; } set { simulationParameters[1] = value; simulator.SetFloat("c", simulationParameters[1]); } }
     public float rain { get { return simulationParameters[2]; } set { simulationParameters[2] = value; simulator.SetFloat("r", simulationParameters[2]); } } // amount of rain per pixel
-    public float bedrockErosionSpeed { get { return simulationParameters[3]; } set { simulationParameters[3] = value; simulator.SetFloat("e0", simulationParameters[3]); } }
-    public float regolithErosionSpeed { get { return simulationParameters[4]; } set { simulationParameters[4] = value; simulator.SetFloat("e1", simulationParameters[4]); } }
-    public float waterErosionExponent { get { return simulationParameters[5]; } set { simulationParameters[5] = value; simulator.SetFloat("m", simulationParameters[5]); } } // water depth multiplier
-    public float waterErosionExponent2 { get { return simulationParameters[6]; } set { simulationParameters[6] = value; simulator.SetFloat("n", simulationParameters[6]); } } // slope multiplier
-    public float sedimentationRate { get { return simulationParameters[7]; } set { simulationParameters[7] = value; simulator.SetFloat("s", simulationParameters[7]); } }
-    public float weatheringRate { get { return simulationParameters[8]; } set { simulationParameters[8] = value; simulator.SetFloat("w", simulationParameters[8]); } }
-    public float regolithProtectionExponent { get { return simulationParameters[9]; } set { simulationParameters[9] = value; simulator.SetFloat("p0", simulationParameters[9]); } } // protecting against bedrock erosion (Cannot be 0)
-    public float regolithProtectionExponent2 { get { return simulationParameters[10]; } set { simulationParameters[10] = value; simulator.SetFloat("p1", simulationParameters[10]); } } // protecting against bedrock weathering (Cannot be 0)  
-    public float timestepLength { get { return simulationParameters[11]; } set { simulationParameters[11] = value; simulator.SetFloat("dt", simulationParameters[11]); } } // timestep
+    public float erosionSpeed { get { return simulationParameters[3]; } set { simulationParameters[3] = value; simulator.SetFloat("e", simulationParameters[3]); } }
+    public float erosionExponent { get { return simulationParameters[4]; } set { simulationParameters[4] = value; simulator.SetFloat("m", simulationParameters[4]); } } // water depth multiplier
+    public float erosionExponent2 { get { return simulationParameters[5]; } set { simulationParameters[5] = value; simulator.SetFloat("n", simulationParameters[5]); } } // slope multiplier
+    public float sedimentationRate { get { return simulationParameters[6]; } set { simulationParameters[6] = value; simulator.SetFloat("s", simulationParameters[6]); } }
+    public float timestepLength { get { return simulationParameters[7]; } set { simulationParameters[7] = value; simulator.SetFloat("dt", simulationParameters[7]); } } // timestep
+
+    int steps = 0;
 
     public TerrainSimulator(ComputeShader simulator)
     {
@@ -36,13 +34,12 @@ public class TerrainSimulator
         if (File.Exists("config/lastSimParams.data")) Load("config/lastSimParams.data");
         else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
 
-        timestepLength = 0.5f;
-        weatheringRate = 0.01f;
-        creepSpeed = 1;
-        bedrockErosionSpeed = 0.1f;
-        regolithErosionSpeed = 0.3f;
-        regolithProtectionExponent = 2.0f;
-        regolithProtectionExponent2 = 4.0f;
+        uplift = 0;
+        rain = 0;
+        timestepLength = 0.1f;
+        erosionExponent = 0.2f;
+        erosionExponent2 = 0.4f;
+        sedimentationRate = 5f;
     }
 
     public void OnDestroy()
@@ -82,7 +79,9 @@ public class TerrainSimulator
         simulator.SetTexture(generationKernel, "genResult", readA ? texA : texB);
         simulator.Dispatch(generationKernel, texA.width / 8, texA.height / 8, 1);
 
-        rain = 0.1f / timestepLength;
+        steps = 0;
+        creepSpeed = 0;
+        erosionSpeed = 0;
     }
 
     public void RunSimulationStep(Vector3Int threadGroups)
@@ -99,7 +98,11 @@ public class TerrainSimulator
 
         readA = !readA;
 
-        rain = 0;
+        if(steps > 5000)
+        {
+            creepSpeed = 0.01f;
+            erosionSpeed = 0.001f;
+        }
     }
 
 
@@ -136,26 +139,22 @@ public class TerrainSimulator
     public void Load(string filePath)
     {
         byte[] data = File.ReadAllBytes(filePath);
-        float[] values = new float[12];
+        float[] values = new float[8];
         Buffer.BlockCopy(data, 0, values, 0, values.Length);
 
         uplift = values[0];
         creepSpeed = values[1];
         rain = values[2];
-        bedrockErosionSpeed = values[3];
-        regolithErosionSpeed = values[4];
-        waterErosionExponent = values[5];
-        waterErosionExponent2 = values[6];
-        sedimentationRate = values[7];
-        weatheringRate = values[8];
-        regolithProtectionExponent = values[9];
-        regolithProtectionExponent2 = values[10];
-        timestepLength = values[11];
+        erosionSpeed = values[3];
+        erosionExponent = values[4];
+        erosionExponent2 = values[5];
+        sedimentationRate = values[6];
+        timestepLength = values[7];
     }
 
     public void Save(string filePath) 
     {
-        byte[] data = new byte[12 * sizeof(float)];
+        byte[] data = new byte[8 * sizeof(float)];
         Buffer.BlockCopy(simulationParameters,0,data,0, data.Length);
         File.WriteAllBytes(filePath, data);
     }

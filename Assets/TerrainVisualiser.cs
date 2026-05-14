@@ -64,20 +64,17 @@ public class TerrainVisualiser
         }
     }
 
-    public void SetThresholds(List<ColourThreshold> bedrockThresholds, List<ColourThreshold> regolithThresholds, List<ColourThreshold> waterThresholds)
+    public void SetThresholds(List<ColourThreshold> bedrockThresholds, List<ColourThreshold> waterThresholds)
     {
         visualiser.SetInt("bedrockThresholds", bedrockThresholds.Count);
-        visualiser.SetInt("regolithThresholds", regolithThresholds.Count);
         visualiser.SetInt("waterThresholds", waterThresholds.Count);
 
-        int total = bedrockThresholds.Count + regolithThresholds.Count + waterThresholds.Count;
+        int total = bedrockThresholds.Count + waterThresholds.Count;
         float[] thresholdValues = new float[total];
         float[] thresholdColours = new float[total * 4];
         int start = 0;
         InsertThresholds(bedrockThresholds, start, ref thresholdValues, ref thresholdColours);
         start += bedrockThresholds.Count;
-        InsertThresholds(regolithThresholds, start, ref thresholdValues, ref thresholdColours);
-        start += regolithThresholds.Count;
         InsertThresholds(waterThresholds, start, ref thresholdValues, ref thresholdColours);
 
         if (thresholdBuffer != null) thresholdBuffer.Release(); 

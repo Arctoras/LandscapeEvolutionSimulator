@@ -4,7 +4,6 @@
 uint2 dim;
 
 int bedrockThresholds;
-int regolithThresholds;
 int waterThresholds;
 StructuredBuffer<float> thresholds;
 StructuredBuffer<float4> colours;
@@ -50,9 +49,7 @@ void Tex(uint3 id : SV_DispatchThreadID)
     int first = 0;
     colour = sampleThreshold(first, first + bedrockThresholds - 1, states.x); // Bedrock
     first += bedrockThresholds;
-    colour = stack(colour, sampleThreshold(first, first + regolithThresholds - 1, states.y)); // Regolith
-    first += regolithThresholds;
-    colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.z)); // Water
+    colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.y)); // Water
     
     colour.a = 1;
     
