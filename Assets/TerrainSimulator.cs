@@ -7,6 +7,7 @@ public class TerrainSimulator
     ComputeShader simulator;
 
     bool readA = true;
+    RenderTextureDescriptor texDescriptor;
     RenderTexture texA = null;
     RenderTexture texB = null;
 
@@ -31,6 +32,11 @@ public class TerrainSimulator
 
         if (File.Exists("config/lastSimParams.data")) Load("config/lastSimParams.data");
         else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
+
+        texDescriptor =  new RenderTextureDescriptor(1,1,RenderTextureFormat.RFloat, 0, 0, RenderTextureReadWrite.Linear);
+        texDescriptor.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
+        texDescriptor.volumeDepth = 3;
+        texDescriptor.enableRandomWrite = true;
 
         uplift = 0; // The average uplift of the terrain must be 0
         timestepLength = 1f;
@@ -98,6 +104,9 @@ public class TerrainSimulator
 
     public void Init(Vector2Int gridDimensions)
     {
+        texDescriptor.width = gridDimensions.x;
+        texDescriptor.height = gridDimensions.y;
+
         if (texA != null)
         {
             texA.Release();
@@ -106,8 +115,7 @@ public class TerrainSimulator
         }
         else
         {
-            texA = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-            texA.enableRandomWrite = true;
+            texA = new RenderTexture(texDescriptor);
         }
         if (texB != null)
         {
@@ -117,8 +125,7 @@ public class TerrainSimulator
         }
         else
         {
-            texB = new RenderTexture(gridDimensions.x, gridDimensions.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-            texB.enableRandomWrite = true;
+            texB = new RenderTexture(texDescriptor);
         }
 
         texA.Create();

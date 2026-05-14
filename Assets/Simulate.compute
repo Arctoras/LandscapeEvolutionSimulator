@@ -16,8 +16,8 @@ uint2 dim;
 float cellSize;
 float doubleCellSize;
 
-Texture2D<float4> input;
-RWTexture2D<float4> result;
+Texture3D<float> input;
+RWTexture3D<float> result;
 
 // Simulation Parameters:
 float u;   // uplift
@@ -29,12 +29,17 @@ float n;   // water erosion exponent (slope multiplier)
 float s;   // sedimentation rate
 float dt;  // timestep
 
-void sampleNeighbours(uint2 coord, out float4 px, out float4 nx, out float4 py, out float4 ny)
+float3 sampleLand(uint2 coord)
 {
-    px = input[wrapPx(coord)];
-    nx = input[wrapNx(coord)];
-    py = input[wrapNy(coord)];
-    ny = input[wrapPy(coord)];
+    return float3(input[uint3(coord, 0)], input[uint3(coord, 1)], input[uint3(coord, 2)]);
+}
+
+void sampleNeighbours(uint2 coord, out float3 px, out float3 nx, out float3 py, out float3 ny)
+{
+    px = sampleLand(wrapPx(coord));
+    nx = sampleLand(wrapNx(coord));
+    py = sampleLand(wrapNy(coord));
+    ny = sampleLand(wrapPy(coord));
 }
 
 
@@ -43,11 +48,11 @@ void Simulate (uint3 id : SV_DispatchThreadID)
 {
     uint2 coord = id.xy;
     
-    float4 here = input[coord];
-    float4 px;
-    float4 nx;
-    float4 py;
-    float4 ny;
+    float3 here = sampleLand(coord);
+    float3 px;
+    float3 nx;
+    float3 py;
+    float3 ny;
     sampleNeighbours(coord, px, nx, py, ny);
     
     float landHeightLaplacian = (px.x + nx.x + py.x + ny.x - 4 * here.x) / cellSize;
@@ -64,10 +69,10 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     
     int routesOut = 0;
     float2 pxFlow;
-    float4 px2;
-    float4 nx2;
-    float4 py2;
-    float4 ny2;
+    float3 px2;
+    float3 nx2;
+    float3 py2;
+    float3 ny2;
     if (diffPx > 0)
     {
         sampleNeighbours(wrapPx(coord), px2, nx2, py2, ny2);
@@ -134,16 +139,18 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float dh = creep - erosion + u + sedimentation; // Change in bedrock height with respect to time
     float dl = sedimentFlow + erosion - sedimentation; // Change in transported sediment with respect to time
 
-    float4 newState = here + dt * float4(dh, dw, dl, 0);
+    float3 newState = here + dt * float3(dh, dw, dl);
     
-    result[coord] = float4(newState.x, max(0, newState.y), max(0, newState.z), 0); // this max should never actually do anything unless something goes wrong
+    result[uint3(coord, 0)] = newState.x;
+    result[uint3(coord, 1)] = max(0, newState.y); // this max should never actually do anything unless something goes wrong
+    result[uint3(coord, 2)] = max(0, newState.z);
 }
 
 
 uint octaves;
 float noiseScale;
 
-RWTexture2D<float4> genResult;
+RWTexture3D<float> genResult;
 float width;
 float height;
 float left;
@@ -156,10 +163,10 @@ void Generate(uint3 id : SV_DispatchThreadID)
     float s = id.x / float(dim.x - 1);
     float t = id.y / float(dim.y - 1);
     
-    float nx = seed[0] + left + cos(s * 2 * PI) * width / (2 * PI);
-    float ny = seed[1] + bottom + cos(t * 2 * PI) * height / (2 * PI);
-    float nz = seed[2] + left + sin(s * 2 * PI) * width / (2 * PI);
-    float nw = seed[3] + bottom + sin(t * 2 * PI) * height / (2 * PI);
+    float nx = seed.x + left + cos(s * 2 * PI) * width / (2 * PI);
+    float ny = seed.y + bottom + cos(t * 2 * PI) * height / (2 * PI);
+    float nz = seed.z + left + sin(s * 2 * PI) * width / (2 * PI);
+    float nw = seed.w + bottom + sin(t * 2 * PI) * height / (2 * PI);
     
     float frequency = 1 / noiseScale;
     float scale = 10;
@@ -172,5 +179,7 @@ void Generate(uint3 id : SV_DispatchThreadID)
         frequency *= 2;
     }
     
-    genResult[id.xy] = float4(sum, 0.01, 0, 0);
+    genResult[uint3(id.xy, 0)] = sum;
+    genResult[uint3(id.xy, 1)] = max(0, -sum);
+    genResult[uint3(id.xy, 2)] = 0;
 }

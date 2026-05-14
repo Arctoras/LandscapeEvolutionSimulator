@@ -8,7 +8,7 @@ int waterThresholds;
 StructuredBuffer<float> thresholds;
 StructuredBuffer<float4> colours;
 
-Texture2D<float4> stateTexture;
+Texture3D<float> stateTexture;
 RWTexture2D<float4> visTexture;
 
 float4 stack(float4 below, float4 above)
@@ -44,7 +44,7 @@ float4 sampleThreshold(int first, int last, float value)
 [numthreads(8, 8, 1)]
 void Tex(uint3 id : SV_DispatchThreadID)
 {
-    float4 states = stateTexture[id.xy];
+    float2 states = float2(stateTexture[uint3(id.xy, 0)], stateTexture[uint3(id.xy, 1)]);
     float4 colour = float4(1, 1, 0, 0); // No valid thresholds -> Yellow
     int first = 0;
     colour = sampleThreshold(first, first + bedrockThresholds - 1, states.x); // Bedrock
