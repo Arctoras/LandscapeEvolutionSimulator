@@ -144,7 +144,7 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float erosion = e * streamPower;
     float creep = c * landHeightLaplacian;
     
-    float sedimentation = here.y > 0 ? min(s * min(here.z, here.z + sedimentFlow) / here.y, here.z + sedimentFlow) : min(here.z, here.z + sedimentFlow); // Sediment flow can be negative and so we need to avoid possibly creating sediment out of nothing
+    float sedimentation = streamPower > 0 ? min(s * min(here.z, here.z + sedimentFlow) / streamPower, here.z + sedimentFlow) : min(here.z, here.z + sedimentFlow); // Sediment flow can be negative and so we need to avoid possibly creating sediment out of nothing
     
     float dw = r + waterFlow; // Change in water depth with respect to time
     float dh = creep - erosion + u + sedimentation; // Change in bedrock height with respect to time
@@ -188,5 +188,5 @@ void Generate(uint3 id : SV_DispatchThreadID)
         frequency *= 2;
     }
     
-    genResult[id.xy] = float4(sum, max(0.1, -sum), 0, 0);
+    genResult[id.xy] = float4(sum, 0.01, 0, 0);
 }

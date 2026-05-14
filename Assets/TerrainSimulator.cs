@@ -35,7 +35,9 @@ public class TerrainSimulator
         else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
 
         uplift = 0;
-        rain = 0;
+        rain = 0.0005f;
+        creepSpeed = 0.01f;
+        erosionSpeed = 0.01f;
         timestepLength = 0.1f;
         erosionExponent = 0.2f;
         erosionExponent2 = 0.4f;
@@ -97,12 +99,6 @@ public class TerrainSimulator
         simulator.Dispatch(simulationKernel, threadGroups.x, threadGroups.y, threadGroups.z);
 
         readA = !readA;
-
-        if(steps > 5000)
-        {
-            creepSpeed = 0.01f;
-            erosionSpeed = 0.001f;
-        }
     }
 
 
