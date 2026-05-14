@@ -25,6 +25,7 @@ public class SimulationController : MonoBehaviour
     int targetSteps = 0;
     int stepsPerRender = 1;
 
+    public bool updateThresholds = true;
     public List<ColourThreshold> colourThresholdsBedrock;
     public List<ColourThreshold> colourThresholdsWater;
 
@@ -33,8 +34,6 @@ public class SimulationController : MonoBehaviour
     {
         visualiser = new TerrainVisualiser(visualisationShader, visualisationMaterial);
         simulator = new TerrainSimulator(simulationShader);
-
-        visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsWater);
 
         SetGridDimensions(new Vector2Int(1024, 1024));
         octaves = 5;
@@ -45,6 +44,11 @@ public class SimulationController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (updateThresholds)
+        {
+            visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsWater);
+            updateThresholds = false;
+        }
         if (genSeed)
         {
             simulator.GenerateSeedTexture(octaves, cellSize, seed);
@@ -99,7 +103,7 @@ public class SimulationController : MonoBehaviour
         gridDimensions.x -= gridDimensions.x % 8;
         gridDimensions.y -= gridDimensions.y % 8;
         int numPoints = gridDimensions.x * gridDimensions.y;
-        int numTextures = 4;
+        int numTextures = 3;
         int bytesPerPoint = numTextures * 4 * 4 /*+ (visualiser.mesh ? 8 * 4 : 0)*/;
         int numTris = 2 * (gridDimensions.x - 1) * (gridDimensions.y - 1);
         //int bytesPerTri = 3 * 4;
