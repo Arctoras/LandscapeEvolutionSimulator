@@ -105,7 +105,7 @@ public class SimulationController : MonoBehaviour
         int numPoints = gridDimensions.x * gridDimensions.y;
         int numTextures = 3;
         int bytesPerPoint = numTextures * 4 * 4 /*+ (visualiser.mesh ? 8 * 4 : 0)*/;
-        int numTris = 2 * (gridDimensions.x - 1) * (gridDimensions.y - 1);
+        //int numTris = 2 * (gridDimensions.x - 1) * (gridDimensions.y - 1);
         //int bytesPerTri = 3 * 4;
         float roughMemoryUse = (float)numPoints * (float)bytesPerPoint /*+ (float)(visualiser.mesh ? numTris * bytesPerTri : 0)*/;
         if (roughMemoryUse >= 5000000000f) // Limit graphics memory usage to 5GB maximum

@@ -6,6 +6,12 @@
 
 #define PI 3.14159265359
 
+// Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
+#define wrapPx(coord) (coord.x + 1 == dim.x ? uint2(1, coord.y) : uint2(coord.x + 1, coord.y)) 
+#define wrapNx(coord) (coord.x == 0 ? uint2(dim.x - 2, coord.y) : uint2(coord.x - 1, coord.y)) 
+#define wrapNy(coord) (coord.y + 1 == dim.y ? uint2(coord.x, 1) : uint2(coord.x, coord.y + 1)) 
+#define wrapPy(coord) (coord.y == 0 ? uint2(coord.x, dim.y - 2) : uint2(coord.x, coord.y - 1)) 
+
 uint2 dim;
 float cellSize;
 float doubleCellSize;
@@ -23,18 +29,12 @@ float n;   // water erosion exponent (slope multiplier)
 float s;   // sedimentation rate
 float dt;  // timestep
 
-
 void sampleNeighbours(uint2 coord, out float4 px, out float4 nx, out float4 py, out float4 ny)
 {
-    // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
-    if (coord.x + 1 == dim.x) px = input[uint2(1, coord.y)];
-    else                      px = input[uint2(coord.x + 1, coord.y)];
-    if (coord.x == 0)         nx = input[uint2(dim.x - 2, coord.y)];
-    else                      nx = input[uint2(coord.x - 1, coord.y)];
-    if (coord.y + 1 == dim.y) py = input[uint2(coord.x, 1)];
-    else                      py = input[uint2(coord.x, coord.y + 1)];
-    if (coord.y == 0)         ny = input[uint2(coord.x, dim.y - 2)];
-    else                      ny = input[uint2(coord.x, coord.y - 1)];
+    px = input[wrapPx(coord)];
+    nx = input[wrapNx(coord)];
+    py = input[wrapNy(coord)];
+    ny = input[wrapPy(coord)];
 }
 
 
@@ -64,14 +64,13 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     
     int routesOut = 0;
     float2 pxFlow;
+    float4 px2;
+    float4 nx2;
+    float4 py2;
+    float4 ny2;
     if (diffPx > 0)
     {
-        float4 px2;
-        float4 nx2; // here
-        float4 py2;
-        float4 ny2;
-        if (coord.x + 1 == dim.x) sampleNeighbours(uint2(1, coord.y), px2, nx2, py2, ny2);
-        else                      sampleNeighbours(uint2(coord.x + 1, coord.y), px2, nx2, py2, ny2);
+        sampleNeighbours(wrapPx(coord), px2, nx2, py2, ny2);
         int routesOut2 = 1 + (px2.x + px2.y > pxWaterHeight ? 0 : 1) + (py2.x + py2.y > pxWaterHeight ? 0 : 1) + (ny2.x + ny2.y > pxWaterHeight ? 0 : 1);
         pxFlow = px.yz / routesOut2;
     }
@@ -82,12 +81,7 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float2 nxFlow;
     if (diffNx > 0)
     {
-        float4 px2; // here
-        float4 nx2; 
-        float4 py2;
-        float4 ny2;
-        if (coord.x == 0) sampleNeighbours(uint2(dim.x - 2, coord.y), px2, nx2, py2, ny2);
-        else              sampleNeighbours(uint2(coord.x - 1, coord.y), px2, nx2, py2, ny2);
+        sampleNeighbours(wrapNx(coord), px2, nx2, py2, ny2);
         int routesOut2 = 1 + (nx2.x + nx2.y > nxWaterHeight ? 0 : 1) + (py2.x + py2.y > nxWaterHeight ? 0 : 1) + (ny2.x + ny2.y > nxWaterHeight ? 0 : 1);
         nxFlow = nx.yz / routesOut2;
     }
@@ -98,12 +92,7 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float2 pyFlow;
     if (diffPy > 0)
     {
-        float4 px2;
-        float4 nx2; 
-        float4 py2;
-        float4 ny2; // here
-        if (coord.y + 1 == dim.y) sampleNeighbours(uint2(coord.x, 1), px2, nx2, py2, ny2);
-        else                      sampleNeighbours(uint2(coord.x, coord.y + 1), px2, nx2, py2, ny2);
+        sampleNeighbours(wrapPy(coord), px2, nx2, py2, ny2);
         int routesOut2 = 1 + (px2.x + px2.y > pyWaterHeight ? 0 : 1) + (nx2.x + nx2.y > nyWaterHeight ? 0 : 1) + (py2.x + py2.y > pyWaterHeight ? 0 : 1);
         pyFlow = py.yz / routesOut2;
     }
@@ -114,12 +103,7 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float2 nyFlow;
     if (diffNy > 0)
     {
-        float4 px2;
-        float4 nx2; 
-        float4 py2; // here
-        float4 ny2;
-        if (coord.y == 0) sampleNeighbours(uint2(coord.x, dim.y - 2), px2, nx2, py2, ny2);
-        else              sampleNeighbours(uint2(coord.x, coord.y - 1), px2, nx2, py2, ny2);
+        sampleNeighbours(wrapNy(coord), px2, nx2, py2, ny2);
         int routesOut2 = 1 + (px2.x + px2.y > nyWaterHeight ? 0 : 1) + (nx2.x + nx2.y > nyWaterHeight ? 0 : 1) + (ny2.x + ny2.y > nyWaterHeight ? 0 : 1);
         nyFlow = ny.yz / routesOut2;
     }
