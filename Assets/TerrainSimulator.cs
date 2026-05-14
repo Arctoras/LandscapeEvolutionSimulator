@@ -25,8 +25,6 @@ public class TerrainSimulator
     public float sedimentationRate { get { return simulationParameters[6]; } set { simulationParameters[6] = value; simulator.SetFloat("s", simulationParameters[6]); } }
     public float timestepLength { get { return simulationParameters[7]; } set { simulationParameters[7] = value; simulator.SetFloat("dt", simulationParameters[7]); } } // timestep
 
-    int steps = 0;
-
     public TerrainSimulator(ComputeShader simulator)
     {
         this.simulator = simulator;
@@ -34,7 +32,7 @@ public class TerrainSimulator
         if (File.Exists("config/lastSimParams.data")) Load("config/lastSimParams.data");
         else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
 
-        uplift = 0;
+        uplift = 0; // The average uplift of the terrain must be 0
         rain = 0.0005f;
         creepSpeed = 0.01f;
         erosionSpeed = 0.01f;

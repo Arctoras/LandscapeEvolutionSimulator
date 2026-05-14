@@ -118,7 +118,7 @@ void Simulate (uint3 id : SV_DispatchThreadID)
         float4 nx2; 
         float4 py2; // here
         float4 ny2;
-        if (coord.x == 0) sampleNeighbours(uint2(coord.x, dim.y - 2), px2, nx2, py2, ny2);
+        if (coord.y == 0) sampleNeighbours(uint2(coord.x, dim.y - 2), px2, nx2, py2, ny2);
         else              sampleNeighbours(uint2(coord.x, coord.y - 1), px2, nx2, py2, ny2);
         int routesOut2 = 1 + (px2.x + px2.y > nyWaterHeight ? 0 : 1) + (nx2.x + nx2.y > nyWaterHeight ? 0 : 1) + (ny2.x + ny2.y > nyWaterHeight ? 0 : 1);
         nyFlow = ny.yz / routesOut2;
