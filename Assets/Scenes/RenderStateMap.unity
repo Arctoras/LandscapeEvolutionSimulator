@@ -576,6 +576,8 @@ MonoBehaviour:
   simulationShader: {fileID: 7200000, guid: cd0fc3a4f6c5cc2439200403735ab6c6, type: 3}
   visualisationShader: {fileID: 7200000, guid: 026c330d27041244f8f140dbdbacb7bd, type: 3}
   visualisationMaterial: {fileID: 2100000, guid: 457b920acec131b43b97dfdb72c3df75, type: 2}
+  toggleElevationLines: 1
+  updateThresholds: 1
   colourThresholdsBedrock:
   - value: -20
     colour: {r: 0, g: 0, b: 0, a: 1}
@@ -655,7 +657,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "1024\u200B"
+  m_text: "2048\u200B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -4262,7 +4264,7 @@ MonoBehaviour:
   m_CaretColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_CustomCaretColor: 0
   m_SelectionColor: {r: 0.65882355, g: 0.80784315, b: 1, a: 0.7529412}
-  m_Text: 1024
+  m_Text: 2048
   m_CaretBlinkRate: 0.85
   m_CaretWidth: 1
   m_ReadOnly: 0
@@ -6033,7 +6035,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "1024\u200B"
+  m_text: "2048\u200B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -7700,7 +7702,7 @@ MonoBehaviour:
   m_CaretColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_CustomCaretColor: 0
   m_SelectionColor: {r: 0.65882355, g: 0.80784315, b: 1, a: 0.7529412}
-  m_Text: 1024
+  m_Text: 2048
   m_CaretBlinkRate: 0.85
   m_CaretWidth: 1
   m_ReadOnly: 0

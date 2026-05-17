@@ -3,6 +3,8 @@
 
 uint2 dim;
 
+bool elevationLines = true;
+
 int bedrockThresholds;
 int waterThresholds;
 StructuredBuffer<float> thresholds;
@@ -48,6 +50,8 @@ void Tex(uint3 id : SV_DispatchThreadID)
     float4 colour = float4(1, 1, 0, 0); // No valid thresholds -> Yellow
     int first = 0;
     colour = sampleThreshold(first, first + bedrockThresholds - 1, states.x); // Bedrock
+    float distance = fmod(abs(states.x), 1);
+    if(elevationLines && (distance <= 0.01 || distance >= 0.99)) colour = float4(1,1,0.6,1);
     first += bedrockThresholds;
     colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.y)); // Water
     

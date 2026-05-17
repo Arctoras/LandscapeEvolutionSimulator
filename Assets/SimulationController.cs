@@ -23,8 +23,8 @@ public class SimulationController : MonoBehaviour
     bool restartSim = false;
     int steps = 0;
     int targetSteps = 0;
-    int stepsPerRender = 1;
 
+    public bool toggleElevationLines = false;
     public bool updateThresholds = true;
     public List<ColourThreshold> colourThresholdsBedrock;
     public List<ColourThreshold> colourThresholdsWater;
@@ -35,7 +35,7 @@ public class SimulationController : MonoBehaviour
         visualiser = new TerrainVisualiser(visualisationShader, visualisationMaterial);
         simulator = new TerrainSimulator(simulationShader);
 
-        SetGridDimensions(new Vector2Int(1024, 1024));
+        SetGridDimensions(new Vector2Int(2048, 2048));
         octaves = 5;
         cellSize = 25;
         seed = Vector4.zero;
@@ -44,16 +44,24 @@ public class SimulationController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (toggleElevationLines)
+        {
+            visualiser.ToggleElevationLines();
+            toggleElevationLines = false;
+            if (steps == targetSteps) visualiser.GenerateVisTexture(simulator.states, threadGroups);
+        }
         if (updateThresholds)
         {
             visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsWater);
             updateThresholds = false;
+            if(steps == targetSteps) visualiser.GenerateVisTexture(simulator.states, threadGroups);
         }
         if (genSeed)
         {
             simulator.GenerateSeedTexture(octaves, cellSize, seed);
-            visualiser.GenerateVisTexture(simulator.states, threadGroups);
+            if (targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             genSeed = false;
+            steps = 0;
         }
         if (restartSim)
         {
@@ -65,7 +73,7 @@ public class SimulationController : MonoBehaviour
         if (steps < targetSteps)
         {
             simulator.RunSimulationStep(threadGroups);
-            if(steps % stepsPerRender == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
+            visualiser.GenerateVisTexture(simulator.states, threadGroups);
             steps++;
         }
     }

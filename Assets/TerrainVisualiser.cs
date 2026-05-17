@@ -14,6 +14,7 @@ public class TerrainVisualiser
     ComputeBuffer thresholdBuffer = null;
     ComputeBuffer thresholdColourBuffer = null;
     bool thresholdsChanged = false;
+    bool elevationLines = true;
 
     public TerrainVisualiser(ComputeShader visualisationShader, Material targetMaterial)
     {
@@ -50,6 +51,7 @@ public class TerrainVisualiser
 
         int[] dim = { gridDimensions.x, gridDimensions.y };
         visualiser.SetInts("dim", dim);
+        visualiser.SetBool("elevationLines", elevationLines);
     }
 
     private void InsertThresholds(List<ColourThreshold> thresholds, int start, ref float[] values, ref float[] colours)
@@ -85,6 +87,12 @@ public class TerrainVisualiser
         thresholdColourBuffer.SetData(thresholdColours);
          
         thresholdsChanged = true;
+    }
+
+    public void ToggleElevationLines()
+    {
+        elevationLines = !elevationLines;
+        visualiser.SetBool("elevationLines", elevationLines);
     }
 
     public void GenerateVisTexture(Texture states, Vector3Int threadGroups)
