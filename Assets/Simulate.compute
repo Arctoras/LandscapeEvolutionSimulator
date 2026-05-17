@@ -7,10 +7,10 @@
 #define PI 3.14159265359
 
 // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
-#define wrapPx(coord) (coord.x + 1 == dim.x ? uint2(1, coord.y) : uint2(coord.x + 1, coord.y)) 
-#define wrapNx(coord) (coord.x == 0 ? uint2(dim.x - 2, coord.y) : uint2(coord.x - 1, coord.y)) 
-#define wrapNy(coord) (coord.y + 1 == dim.y ? uint2(coord.x, 1) : uint2(coord.x, coord.y + 1)) 
-#define wrapPy(coord) (coord.y == 0 ? uint2(coord.x, dim.y - 2) : uint2(coord.x, coord.y - 1)) 
+#define wrapPx(coord) uint2((coord.x + 1) % dim.x, coord.y)
+#define wrapNx(coord) uint2((coord.x - 1) % dim.x, coord.y)
+#define wrapNy(coord) uint2(coord.x, (coord.y + 1) % dim.y)
+#define wrapPy(coord) uint2(coord.x, (coord.y - 1) % dim.y)
 
 uint2 dim;
 float cellSize;
