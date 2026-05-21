@@ -55,6 +55,9 @@ void Tex(uint3 id : SV_DispatchThreadID)
     first += bedrockThresholds;
     colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.y)); // Water
     
+    float humidity = max(min(1, 2 * stateTexture[(uint3(id.xy, 4))] / stateTexture[(uint3(id.xy, 3))]), 0);
+    colour = stack(colour, float4((1 - humidity) * float3(1, 1, 1), humidity * 0.5));
+    
     colour.a = 1;
     
     visTexture[id.xy] = colour;

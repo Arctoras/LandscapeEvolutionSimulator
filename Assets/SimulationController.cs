@@ -111,7 +111,7 @@ public class SimulationController : MonoBehaviour
         gridDimensions.x -= gridDimensions.x % 8;
         gridDimensions.y -= gridDimensions.y % 8;
         int numPoints = gridDimensions.x * gridDimensions.y;
-        int bytesPerPoint = 4 * 4 + 2 * 3 * 4 /*+ (visualiser.mesh ? 8 * 4 : 0)*/;
+        int bytesPerPoint = 4 * 4 + 2 * 7 * 4 /*+ (visualiser.mesh ? 8 * 4 : 0)*/;
         //int numTris = 2 * (gridDimensions.x - 1) * (gridDimensions.y - 1);
         //int bytesPerTri = 3 * 4;
         float roughMemoryUse = (float)numPoints * (float)bytesPerPoint /*+ (float)(visualiser.mesh ? numTris * bytesPerTri : 0)*/;
