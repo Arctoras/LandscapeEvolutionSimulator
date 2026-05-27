@@ -14,6 +14,7 @@
 #define wrapPy(coord) uint2(coord.x, (coord.y - 1) % dim.y)
 
 uint2 dim;
+uint airLayers;
 float cellSize;
 float doubleCellSize;
 float cellSizeSquared;
@@ -38,9 +39,9 @@ float3 sampleLand(uint2 coord)
     return float3(input[uint3(coord, 0)], input[uint3(coord, 1)], input[uint3(coord, 2)]);
 }
 
-float2 sampleAir(uint2 coord)
+float2 sampleAir(uint2 coord, uint layer)
 {
-    return float2(input[uint3(coord, 3)], input[uint3(coord, 4)]);
+    return float2(input[uint3(coord.xy, layer * 2 + 3)], input[uint3(coord.xy, layer * 2 + 4)]);
 }
 
 float getWaterHeight(float3 landStates) // Land States
@@ -48,15 +49,15 @@ float getWaterHeight(float3 landStates) // Land States
     return landStates.x + landStates.y;
 }
 
-float getAirPressure(float waterHeight, float2 airStates)
+float getAirPressure(float airColumnHeight, float2 airStates)
 {
-    return airStates.x / (20 - waterHeight);
+    return airStates.x / (airColumnHeight * cellSizeSquared);
 }
 
 float2 sampleFlowStates(uint2 coord)
 {
     float waterHeight = getWaterHeight(sampleLand(coord));
-    return float2(waterHeight, getAirPressure(waterHeight, sampleAir(coord)));
+    return float2(waterHeight, getAirPressure((20 - waterHeight), sampleAir(coord, 0)));
 }
 
 void sampleOutFlow(float2 coord, out float2 diffPx, out float2 diffNx, out float2 diffPy, out float2 diffNy)
@@ -85,7 +86,7 @@ float4 sampleTotalOutFlow(uint2 coord)
     sampleOutFlow(coord, diffPx, diffNx, diffPy, diffNy);
     
     float2 waterSediment = float2(input[uint3(coord, 1)], input[uint3(coord, 2)]);
-    float2 airWater = sampleAir(coord);
+    float2 airWater = sampleAir(coord, 0);
     
     float2 outFlowRate = abs((min(float2(0, 0), diffPx) + min(float2(0, 0), diffNx) + min(float2(0, 0), diffPy) + min(float2(0, 0), diffNy)));
     return float4(outFlowRate.x != 0 ? waterSediment / outFlowRate.x : 0, outFlowRate.y != 0 ? airWater / outFlowRate.y : 0);
@@ -93,8 +94,8 @@ float4 sampleTotalOutFlow(uint2 coord)
 
 float4 getFlow(float2 diff, float4 outFlow, float4 inFlow)
 {
-    float landGradSquared = min(1, diff.x * diff.x / cellSizeSquared);
-    float pressureGradSquared = min(1, diff.y * diff.y / cellSizeSquared);
+    float landGradSquared = min(1, diff.x * diff.x / cellSize);
+    float pressureGradSquared = min(1, diff.y * diff.y / cellSize);
     
     float2 landFlow = float2(0, 0);
     if (diff.x > 0)      landFlow = landGradSquared * inFlow.xy;
@@ -119,7 +120,7 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float3 py = sampleLand(wrapNy(coord));
     float3 ny = sampleLand(wrapPy(coord));
     
-    float2 airHere = sampleAir(coord);
+    float2 airHere = sampleAir(coord, 0);
     
     float2 diffPx, diffNx, diffPy, diffNy;
     sampleOutFlow(coord, diffPx, diffNx, diffPy, diffNy);

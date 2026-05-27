@@ -35,19 +35,8 @@ public class TerrainSimulator
 
         texDescriptor =  new RenderTextureDescriptor(1,1,RenderTextureFormat.RFloat, 0, 0, RenderTextureReadWrite.Linear);
         texDescriptor.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
-        // States:
-        // - Land Layer -
-        // Bedrock height
-        // Water depth
-        // Transported Sediment amount
-        // 
-        // - Air Layer 1 -
-        // Air amount
-        // Water amount
-        //
-        texDescriptor.volumeDepth = 5;
         texDescriptor.enableRandomWrite = true;
-
+        
         uplift = 0; // The average uplift of the terrain must be 0
         timestepLength = 0.1f;
         rain = 0.1f;
@@ -70,21 +59,12 @@ public class TerrainSimulator
 
     public void GenerateSeedTexture(uint octaves, float cellSize, Vector4 seed)
     {
-        int[] dim = { texA.width, texA.height };
-        simulator.SetInts("dim", dim);
         simulator.SetFloat("cellSize", cellSize);
         simulator.SetFloat("doubleCellSize", cellSize * 2);
         simulator.SetFloat("cellSizeSquared", cellSize * cellSize);
 
-        float left = -((float)texA.width) / 2;
-        float bottom = -((float)texA.height) / 2;
-
         simulator.SetInt("octaves", (int)octaves);
         simulator.SetFloat("noiseScale", 2.5f * Mathf.Max(texA.width,texA.height) / cellSize);
-        simulator.SetFloat("width", texA.width);
-        simulator.SetFloat("height", texA.height);
-        simulator.SetFloat("left", left);
-        simulator.SetFloat("bottom", bottom);
 
         float[] seedValues = { seed.x, seed.y, seed.z, seed.w };
         simulator.SetFloats("seed", seedValues);
@@ -114,10 +94,23 @@ public class TerrainSimulator
     }
 
 
-    public void Init(Vector2Int gridDimensions)
+    public void Init(Vector2Int gridDimensions, int stateVariables, int airLayers)
     {
         texDescriptor.width = gridDimensions.x;
         texDescriptor.height = gridDimensions.y;
+        texDescriptor.volumeDepth = stateVariables;
+
+        int[] dim = { gridDimensions.x, gridDimensions.y };
+        simulator.SetInts("dim", dim);
+        simulator.SetInt("airLayers", airLayers);
+
+        float left = -((float)gridDimensions.x) / 2;
+        float bottom = -((float)gridDimensions.y) / 2;
+
+        simulator.SetFloat("width", gridDimensions.x);
+        simulator.SetFloat("height", gridDimensions.y);
+        simulator.SetFloat("left", left);
+        simulator.SetFloat("bottom", bottom);
 
         if (texA != null)
         {

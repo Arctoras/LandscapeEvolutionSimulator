@@ -576,6 +576,7 @@ MonoBehaviour:
   simulationShader: {fileID: 7200000, guid: cd0fc3a4f6c5cc2439200403735ab6c6, type: 3}
   visualisationShader: {fileID: 7200000, guid: 026c330d27041244f8f140dbdbacb7bd, type: 3}
   visualisationMaterial: {fileID: 2100000, guid: 457b920acec131b43b97dfdb72c3df75, type: 2}
+  stepsPerEval: 10
   toggleElevationLines: 1
   updateThresholds: 1
   colourThresholdsBedrock:

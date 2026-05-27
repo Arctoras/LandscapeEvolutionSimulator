@@ -1,5 +1,9 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Unity.Collections;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class SimulationController : MonoBehaviour
 {
@@ -24,10 +28,25 @@ public class SimulationController : MonoBehaviour
     int steps = 0;
     int targetSteps = 0;
 
+    public int stepsPerEval = 0;
+
     public bool toggleElevationLines = false;
     public bool updateThresholds = true;
     public List<ColourThreshold> colourThresholdsBedrock;
     public List<ColourThreshold> colourThresholdsWater;
+
+    // States:
+    // - Land Layer -
+    // Bedrock height
+    // Water depth
+    // Transported Sediment amount
+    // 
+    // - Air Layers -
+    // Air amount
+    // Water amount
+    // 
+    int airLayers = 1;
+    int stateVariables { get { return 3 + airLayers * 2; } set { } }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -62,18 +81,26 @@ public class SimulationController : MonoBehaviour
             if (targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             genSeed = false;
             steps = 0;
+            Evaluate();
         }
         if (restartSim)
         {
             simulator.GenerateSeedTexture(octaves, cellSize, seed);
             if(targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
-            steps = 0;
             restartSim = false;
+            steps = 0;
+            Evaluate();
         }
         if (steps < targetSteps)
         {
             simulator.RunSimulationStep(threadGroups);
             visualiser.GenerateVisTexture(simulator.states, threadGroups);
+
+            if((stepsPerEval > 0 && steps % stepsPerEval == 0) || steps == targetSteps - 1)
+            {
+                Evaluate();
+            }
+
             steps++;
         }
     }
@@ -88,6 +115,45 @@ public class SimulationController : MonoBehaviour
     {
         restartSim = true;
     }
+
+    public void Evaluate()
+    {
+        AsyncGPUReadbackRequest evalRequest = AsyncGPUReadback.Request(simulator.states, 0, AsyncEvaluation);
+    }
+
+    void AsyncEvaluation(AsyncGPUReadbackRequest request)
+    {
+        float[] sums = new float[stateVariables];
+        for (int z = 0; z < stateVariables; z++)
+        {
+            sums[z] = 0;
+        }
+
+        float earth = 0;
+        float water = 0;
+        float air = 0;
+
+        for (int z = 0; z < stateVariables; z++)
+        {
+            NativeArray<float> states = request.GetData<float>(z);
+            sums[z] = states.Sum();
+
+            if (z == 0 || z == 2) earth += sums[z];
+            else if (z == 1 || z % 2 == 0) water += sums[z];
+            else air += sums[z];
+        }
+
+
+        StringBuilder sb = new StringBuilder();
+        for (int z = 0; z < stateVariables; z++)
+        {
+            if (z != 0) sb.Append(" ");
+            sb.Append(sums[z]);
+        }
+        sb.AppendFormat(" | Earth: {0} | Water: {1} | Air: {2}", earth, water, air);
+        Debug.Log(sb.ToString());
+    }
+
     public void SetTargetSteps(int newTarget)
     {
         if (steps > newTarget) RestartSimulation();
@@ -101,9 +167,9 @@ public class SimulationController : MonoBehaviour
         threadGroups.y = this.gridDimensions.y / 8;
 
         visualiser.Init(this.gridDimensions);
-        simulator.Init(this.gridDimensions);
+        simulator.Init(this.gridDimensions, stateVariables, airLayers);
 
-        genSeed = true;
+        genSeed = true; 
     }
 
     Vector2Int FixGridDimensions(Vector2Int gridDimensions)
@@ -111,7 +177,7 @@ public class SimulationController : MonoBehaviour
         gridDimensions.x -= gridDimensions.x % 8;
         gridDimensions.y -= gridDimensions.y % 8;
         int numPoints = gridDimensions.x * gridDimensions.y;
-        int bytesPerPoint = 4 * 4 + 2 * 7 * 4 /*+ (visualiser.mesh ? 8 * 4 : 0)*/;
+        int bytesPerPoint = 4 * 4 + 2 * stateVariables * 4 /*+ (visualiser.mesh ? 8 * 4 : 0)*/;
         //int numTris = 2 * (gridDimensions.x - 1) * (gridDimensions.y - 1);
         //int bytesPerTri = 3 * 4;
         float roughMemoryUse = (float)numPoints * (float)bytesPerPoint /*+ (float)(visualiser.mesh ? numTris * bytesPerTri : 0)*/;
