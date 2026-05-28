@@ -580,26 +580,28 @@ MonoBehaviour:
   toggleElevationLines: 1
   updateThresholds: 1
   colourThresholdsBedrock:
-  - value: -20
+  - value: -6000
     colour: {r: 0, g: 0, b: 0, a: 1}
-  - value: -10
+  - value: -3000
     colour: {r: 0.26415092, g: 0.23424704, b: 0.1482734, a: 1}
   - value: 0
     colour: {r: 0.8113208, g: 0.7811322, b: 0.4554112, a: 1}
-  - value: 1
+  - value: 300
     colour: {r: 0.028034883, g: 0.3962264, b: 0.028034905, a: 1}
-  - value: 10
+  - value: 3000
     colour: {r: 0.2830189, g: 0.2830189, b: 0.2830189, a: 1}
-  - value: 20
+  - value: 6000
     colour: {r: 1, g: 1, b: 1, a: 1}
   colourThresholdsWater:
   - value: 0
-    colour: {r: 0, g: 1, b: 1, a: 0}
-  - value: 0.05
-    colour: {r: 0, g: 1, b: 1, a: 0.2784314}
-  - value: 5
+    colour: {r: 1, g: 1, b: 1, a: 0}
+  - value: 1
+    colour: {r: 1, g: 1, b: 1, a: 0.15686275}
+  - value: 15
+    colour: {r: 0.6556604, g: 1, b: 1, a: 0.2784314}
+  - value: 1500
     colour: {r: 0, g: 0.2390244, b: 1, a: 0.6156863}
-  - value: 20
+  - value: 6000
     colour: {r: 0.00000003598771, g: 0, b: 0.3018868, a: 0.9019608}
 --- !u!1 &73976780
 GameObject:

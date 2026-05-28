@@ -16,15 +16,13 @@ public class TerrainSimulator
     int generationKernel = -1;
     int simulationKernel = -1;
 
-    private float[] simulationParameters = new float[8];
-    public float uplift { get { return simulationParameters[0]; } set { simulationParameters[0] = value; simulator.SetFloat("u", simulationParameters[0]); } }
-    public float creepSpeed { get { return simulationParameters[1]; } set { simulationParameters[1] = value; simulator.SetFloat("c", simulationParameters[1]); } }
-    public float rain { get { return simulationParameters[2]; } set { simulationParameters[2] = value; simulator.SetFloat("r", simulationParameters[2]); } } // amount of rain per pixel
-    public float erosionSpeed { get { return simulationParameters[3]; } set { simulationParameters[3] = value; simulator.SetFloat("e", simulationParameters[3]); } }
-    public float streamPowerExponent { get { return simulationParameters[4]; } set { simulationParameters[4] = value; simulator.SetFloat("m", simulationParameters[4]); } } // water depth multiplier
-    public float streamPowerExponent2 { get { return simulationParameters[5]; } set { simulationParameters[5] = value; simulator.SetFloat("n", simulationParameters[5]); } } // slope multiplier
-    public float sedimentationRate { get { return simulationParameters[6]; } set { simulationParameters[6] = value; simulator.SetFloat("s", simulationParameters[6]); } }
-    public float timestepLength { get { return simulationParameters[7]; } set { simulationParameters[7] = value; simulator.SetFloat("dt", simulationParameters[7]); } } // timestep
+    private float[] simulationParameters = new float[6];
+    public float creepSpeed { get { return simulationParameters[0]; } set { simulationParameters[0] = value; simulator.SetFloat("c", simulationParameters[0]); } }
+    public float erosionSpeed { get { return simulationParameters[1]; } set { simulationParameters[1] = value; simulator.SetFloat("e", simulationParameters[1]); } }
+    public float streamPowerExponent { get { return simulationParameters[2]; } set { simulationParameters[2] = value; simulator.SetFloat("m", simulationParameters[2]); } } // water depth multiplier
+    public float streamPowerExponent2 { get { return simulationParameters[3]; } set { simulationParameters[3] = value; simulator.SetFloat("n", simulationParameters[3]); } } // slope multiplier
+    public float sedimentationRate { get { return simulationParameters[4]; } set { simulationParameters[4] = value; simulator.SetFloat("s", simulationParameters[4]); } }
+    public float timestepLength { get { return simulationParameters[5]; } set { simulationParameters[5] = value; simulator.SetFloat("dt", simulationParameters[5]); } }
 
     public TerrainSimulator(ComputeShader simulator)
     {
@@ -37,11 +35,9 @@ public class TerrainSimulator
         texDescriptor.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
         texDescriptor.enableRandomWrite = true;
         
-        uplift = 0; // The average uplift of the terrain must be 0
         timestepLength = 0.1f;
-        rain = 0.1f;
-        creepSpeed = 0f;
-        erosionSpeed = 0.1f;
+        creepSpeed = 0.001f;
+        erosionSpeed = 0.001f;
         streamPowerExponent = 0.5f;
         streamPowerExponent2 = 1f;
         sedimentationRate = 5f;
@@ -141,22 +137,20 @@ public class TerrainSimulator
     public void Load(string filePath)
     {
         byte[] data = File.ReadAllBytes(filePath);
-        float[] values = new float[8];
+        float[] values = new float[6];
         Buffer.BlockCopy(data, 0, values, 0, values.Length);
 
-        uplift = values[0];
-        creepSpeed = values[1];
-        rain = values[2];
-        erosionSpeed = values[3];
-        streamPowerExponent = values[4];
-        streamPowerExponent2 = values[5];
-        sedimentationRate = values[6];
-        timestepLength = values[7];
+        creepSpeed = values[0];
+        erosionSpeed = values[1];
+        streamPowerExponent = values[2];
+        streamPowerExponent2 = values[3];
+        sedimentationRate = values[4];
+        timestepLength = values[5];
     }
 
     public void Save(string filePath) 
     {
-        byte[] data = new byte[8 * sizeof(float)];
+        byte[] data = new byte[6 * sizeof(float)];
         Buffer.BlockCopy(simulationParameters,0,data,0, data.Length);
         File.WriteAllBytes(filePath, data);
     }

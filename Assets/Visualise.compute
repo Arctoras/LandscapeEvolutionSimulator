@@ -50,13 +50,10 @@ void Tex(uint3 id : SV_DispatchThreadID)
     float4 colour = float4(1, 1, 0, 0); // No valid thresholds -> Yellow
     int first = 0;
     colour = sampleThreshold(first, first + bedrockThresholds - 1, states.x); // Bedrock
-    float distance = fmod(abs(states.x), 1);
-    if(elevationLines && (distance <= 0.01 || distance >= 0.99)) colour = float4(1,1,0.6,1);
+    float distance = fmod(abs(states.x), 250);
+    if(elevationLines && (distance <= 2.5 || distance >= 247.5)) colour = float4(1,1,0.6,1);
     first += bedrockThresholds;
     colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.y)); // Water
-    
-    float humidity = max(min(1, 2 * stateTexture[(uint3(id.xy, 4))] / stateTexture[(uint3(id.xy, 3))]), 0);
-    colour = stack(colour, float4((1 - humidity) * float3(1, 1, 1), humidity * 0.5));
     
     colour.a = 1;
     

@@ -4,6 +4,7 @@ using System.Text;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
+using static UnityEditor.VersionControl.Asset;
 
 public class SimulationController : MonoBehaviour
 {
@@ -44,9 +45,10 @@ public class SimulationController : MonoBehaviour
     // - Air Layers -
     // Air amount
     // Water amount
+    // Temperature
     // 
     int airLayers = 1;
-    int stateVariables { get { return 3 + airLayers * 2; } set { } }
+    int stateVariables { get { return 3 + airLayers * 3; } set { } }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -118,7 +120,7 @@ public class SimulationController : MonoBehaviour
 
     public void Evaluate()
     {
-        AsyncGPUReadbackRequest evalRequest = AsyncGPUReadback.Request(simulator.states, 0, AsyncEvaluation);
+        AsyncGPUReadback.Request(simulator.states, 0, AsyncEvaluation);
     }
 
     void AsyncEvaluation(AsyncGPUReadbackRequest request)
@@ -132,6 +134,8 @@ public class SimulationController : MonoBehaviour
         float earth = 0;
         float water = 0;
         float air = 0;
+        float temperature = 0;
+        int total = gridDimensions.x * gridDimensions.y;
 
         for (int z = 0; z < stateVariables; z++)
         {
@@ -139,10 +143,18 @@ public class SimulationController : MonoBehaviour
             sums[z] = states.Sum();
 
             if (z == 0 || z == 2) earth += sums[z];
-            else if (z == 1 || z % 2 == 0) water += sums[z];
+            else if (z == 1) water += sums[z] * cellSize * cellSize;
+            else if (z % 3 == 1) water += sums[z];
+            else if (z % 3 == 2) temperature += sums[z] / total;
             else air += sums[z];
         }
 
+        float volume = cellSize * cellSize * (6000.0f * total - (sums[0] + sums[1]));
+        float vapourPressure = 461520 * temperature * sums[4] / volume;
+        float pressure = vapourPressure + temperature * 287.052874f * sums[3] / volume;
+        float enhancement = 1.00071f * Mathf.Exp(0.000000045f * pressure);
+        float saturationPressure = enhancement * Mathf.Exp(34.494f - 4924.99f / (temperature - 36.05f)) / Mathf.Pow(temperature - 168.15f, 1.57f);
+        Debug.LogFormat("Pressure: {0} | Vapour Pressure: {1} | Saturation Pressure: {2} | Humidity: {3}", pressure, vapourPressure, saturationPressure, vapourPressure / saturationPressure);
 
         StringBuilder sb = new StringBuilder();
         for (int z = 0; z < stateVariables; z++)
@@ -150,7 +162,7 @@ public class SimulationController : MonoBehaviour
             if (z != 0) sb.Append(" ");
             sb.Append(sums[z]);
         }
-        sb.AppendFormat(" | Earth: {0} | Water: {1} | Air: {2}", earth, water, air);
+        sb.AppendFormat(" | Earth: {0} | Water: {1} | Air: {2} | Temperature (Average): {3}", earth, water, air, temperature);
         Debug.Log(sb.ToString());
     }
 

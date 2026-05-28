@@ -6,6 +6,9 @@
 
 #define PI 3.14159265359
 #define E 2.71828182846
+// 1 Water is 1m^3 of liquid water which weighs ~1000kg
+#define WATER_GAS_CONSTANT 461.52 * 1000
+#define AIR_GAS_CONSTANT 287.052874
 
 // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
 #define wrapPx(coord) uint2((coord.x + 1) % dim.x, coord.y)
@@ -23,10 +26,8 @@ Texture3D<float> input;
 RWTexture3D<float> result;
 
 // Simulation Parameters:
-float u;   // uplift rate (currently unused)
 float c;   // creep speed
 float e;   // bedrock erosion speed
-float r;   // rain rate
 float s;   // sedimentation rate
 float m;   // water erosion exponent (water depth multiplier)
 float n;   // water erosion exponent (slope multiplier)
@@ -34,79 +35,203 @@ float dt;  // timestep
 
 float2 windSpeed;
 
-float3 sampleLand(uint2 coord)
+struct GroundLayer
 {
-    return float3(input[uint3(coord, 0)], input[uint3(coord, 1)], input[uint3(coord, 2)]);
-}
-
-float2 sampleAir(uint2 coord, uint layer)
-{
-    return float2(input[uint3(coord.xy, layer * 2 + 3)], input[uint3(coord.xy, layer * 2 + 4)]);
-}
-
-float getWaterHeight(float3 landStates) // Land States
-{
-    return landStates.x + landStates.y;
-}
-
-float getAirPressure(float airColumnHeight, float2 airStates)
-{
-    return airStates.x / (airColumnHeight * cellSizeSquared);
-}
-
-float2 sampleFlowStates(uint2 coord)
-{
-    float waterHeight = getWaterHeight(sampleLand(coord));
-    return float2(waterHeight, getAirPressure((20 - waterHeight), sampleAir(coord, 0)));
-}
-
-void sampleOutFlow(float2 coord, out float2 diffPx, out float2 diffNx, out float2 diffPy, out float2 diffNy)
-{
-    float2 here = sampleFlowStates(coord);
-    float2 px = sampleFlowStates(wrapPx(coord));
-    float2 nx = sampleFlowStates(wrapNx(coord));
-    float2 py = sampleFlowStates(wrapPy(coord));
-    float2 ny = sampleFlowStates(wrapNy(coord));
+    float h; // Bedrock Height
+    float w; // Water Depth
+    float s; // Sediment Amount
     
-    diffPx = px - here;
-    diffNx = nx - here;
-    diffPy = py - here;
-    diffNy = ny - here;
+    static GroundLayer sample(uint2 coord)
+    {
+        GroundLayer states;
+        states.h = input[uint3(coord, 0)];
+        states.w = input[uint3(coord, 1)];
+        states.s = input[uint3(coord, 2)];
+        return states;
+    }
     
-    diffPx.y += windSpeed.x;
-    diffNx.y -= windSpeed.x;
-    diffPy.y += windSpeed.y;
-    diffNy.y -= windSpeed.y;
-}
+    void applyStep(uint2 coord, float dh, float dw, float ds)
+    {
+        result[uint3(coord, 0)] = h + dt * dh;
+        result[uint3(coord, 1)] = max(0, w + dt * dw); // this max should never actually do anything unless something goes wrong
+        result[uint3(coord, 2)] = max(0, s + dt * ds);
+    }
+    
+    void apply(RWTexture3D<float> target, uint2 coord)
+    {
+        target[uint3(coord, 0)] = h;
+        target[uint3(coord, 1)] = w;
+        target[uint3(coord, 2)] = s;
+    }
+    
+    float2 flow(float flowRate)
+    {
+        return flowRate > 0 ? float2(w, s) / flowRate : float2(0, 0);
+    }
+    
+    float getWaterHeight()
+    {
+        return h + w;
+    }
+    
+    float4 outFlow(GroundLayer px, GroundLayer nx, GroundLayer py, GroundLayer ny, out float totalOutFlow)
+    {
+        float waterHeight = getWaterHeight();
+        
+        float diffPx = px.getWaterHeight() - waterHeight;
+        float diffNx = nx.getWaterHeight() - waterHeight;
+        float diffPy = py.getWaterHeight() - waterHeight;
+        float diffNy = ny.getWaterHeight() - waterHeight;
+        
+        totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy));
+        return float4(diffPx, diffNx, diffPy, diffNy);
+    }
+    
+    float2 totalOutFlow(uint2 coord)
+    {
+        GroundLayer px = GroundLayer::sample(wrapPx(coord));
+        GroundLayer nx = GroundLayer::sample(wrapNx(coord));
+        GroundLayer py = GroundLayer::sample(wrapPy(coord));
+        GroundLayer ny = GroundLayer::sample(wrapNy(coord));
 
-float4 sampleTotalOutFlow(uint2 coord)
+        float total;
+        outFlow(px, nx, py, ny, total);
+        return flow(total);
+    }
+    
+    static float2 getFlow(float diff, float2 outFlow, float2 inFlow)
+    {
+        float landGradSquared = min(1, diff.x * diff.x / cellSize);
+    
+        float2 landFlow = float2(0, 0);
+        if (diff.x > 0) landFlow = landGradSquared * inFlow.xy;
+        else if (diff.x < 0) landFlow = landGradSquared * outFlow.xy;
+
+        return landFlow;
+    }
+    
+    // Calculations requiring knowledge about only the ground layer
+    void landCalcs(uint2 coord, out float creep, out float erosion, out float sedimentation, out float waterFlow, out float sedimentFlow, out float stillWater)
+    {
+        GroundLayer px = GroundLayer::sample(wrapPx(coord));
+        GroundLayer nx = GroundLayer::sample(wrapNx(coord));
+        GroundLayer py = GroundLayer::sample(wrapNy(coord));
+        GroundLayer ny = GroundLayer::sample(wrapPy(coord));
+    
+        float outFlowRate;
+        float4 directionalFlow = outFlow(px, nx, py, ny, outFlowRate);
+        float2 outFlow = flow(-outFlowRate);
+    
+        // Split water/sediment between each direction of flow weighted by the amount of flow in those directions
+        float2 pxOutFlow = px.totalOutFlow(wrapPx(coord));
+        float2 nxOutFlow = nx.totalOutFlow(wrapNx(coord));
+        float2 pyOutFlow = py.totalOutFlow(wrapPy(coord));
+        float2 nyOutFlow = ny.totalOutFlow(wrapNy(coord));
+    
+        float2 pxFlow = getFlow(directionalFlow.x, outFlow, pxOutFlow);
+        float2 nxFlow = getFlow(directionalFlow.y, outFlow, nxOutFlow);
+        float2 pyFlow = getFlow(directionalFlow.z, outFlow, pyOutFlow);
+        float2 nyFlow = getFlow(directionalFlow.w, outFlow, nyOutFlow);
+    
+    
+        float waterSurfaceSlope = length(float2(directionalFlow.x - directionalFlow.y, directionalFlow.z - directionalFlow.w)) / doubleCellSize; // Average gradient across point
+        float streamPower = 0;
+        if (w > 0 && waterSurfaceSlope > 0)
+            streamPower = pow(w, m) * pow(waterSurfaceSlope, n); // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
+    
+        float landHeightLaplacian = (px.h + nx.h + py.h + ny.h - 4 * h) / cellSizeSquared;
+        
+        stillWater = w - outFlowRate;
+        
+        waterFlow = (pxFlow.x + nxFlow.x + pyFlow.x + nyFlow.x); // Positive -> flow in | Negative -> flow out
+        sedimentFlow = (pxFlow.y + nxFlow.y + pyFlow.y + nyFlow.y); // Positive -> flow in | Negative -> flow out
+    
+        erosion = e * streamPower;
+        creep = c * landHeightLaplacian;
+        
+        sedimentation = streamPower > 0 ? min(s * min(s, s + sedimentFlow) / streamPower, s + sedimentFlow) : min(s, s + sedimentFlow); // Sediment flow can be negative and so we need to avoid possibly creating sediment out of nothing
+    }
+};
+
+struct AirLayer
 {
-    float2 diffPx, diffNx, diffPy, diffNy;
+    float a; // Air Amount
+    float w; // Water Amount
+    float t; // Temperature
     
-    sampleOutFlow(coord, diffPx, diffNx, diffPy, diffNy);
+    float p; // Pressure
+    float vp; // Vapour Pressure
+    float sp; // Saturation Pressure
     
-    float2 waterSediment = float2(input[uint3(coord, 1)], input[uint3(coord, 2)]);
-    float2 airWater = sampleAir(coord, 0);
+    static AirLayer sample(uint2 coord, uint layer)
+    {
+        AirLayer states;
+        states.a = input[uint3(coord.xy, layer * 3 + 3)];
+        states.w = input[uint3(coord.xy, layer * 3 + 4)];
+        states.t = input[uint3(coord.xy, layer * 3 + 5)];
+        
+        // Air Pressure
+        float height = (layer == 0) ? 6000 - (input[uint3(coord.xy, 0)] + input[uint3(coord.xy, 1)]) : 6000;
+        float volume = height * cellSizeSquared;
+        states.vp = WATER_GAS_CONSTANT * states.t * states.w / volume;
+        states.p = states.vp + AIR_GAS_CONSTANT * states.t * states.a / volume;
+        
+        // Water Vapour Saturation Pressure
+        if (states.t > 273.15) states.sp = exp(34.494 - 4924.99 / (states.t - 36.05)) / pow(states.t - 168.15, 1.57); // Saturation pressure for above freezing point of water
+        else                   states.sp = exp(43.494 - 6545.8 / (states.t + 4.85)) / pow(states.t + 594.85, 2);      // Saturation pressure for below freezing point of water
+        
+        // enhancement factor
+        if (states.t > 273.15) states.sp *= 1.00071 * exp(0.000000045 * states.p);
+        else                   states.sp *= 0.99882 * exp(0.00000008 * states.p);
+        
+        return states;
+    }
     
-    float2 outFlowRate = abs((min(float2(0, 0), diffPx) + min(float2(0, 0), diffNx) + min(float2(0, 0), diffPy) + min(float2(0, 0), diffNy)));
-    return float4(outFlowRate.x != 0 ? waterSediment / outFlowRate.x : 0, outFlowRate.y != 0 ? airWater / outFlowRate.y : 0);
-}
-
-float4 getFlow(float2 diff, float4 outFlow, float4 inFlow)
-{
-    float landGradSquared = min(1, diff.x * diff.x / cellSize);
-    float pressureGradSquared = min(1, diff.y * diff.y / cellSize);
+    void applyStep(uint2 coord, uint layer, float da, float dw, float dT)
+    {
+        result[uint3(coord.xy, layer * 3 + 3)] = max(0, a + dt * da);
+        result[uint3(coord.xy, layer * 3 + 4)] = max(0, w + dt * dw);
+        result[uint3(coord.xy, layer * 3 + 5)] = max(0, t + dt * dT);
+    }
     
-    float2 landFlow = float2(0, 0);
-    if (diff.x > 0)      landFlow = landGradSquared * inFlow.xy;
-    else if (diff.x < 0) landFlow = landGradSquared * outFlow.xy;
-
-    float2 airFlow = float2(0, 0);
-    if (diff.x > 0)      airFlow = pressureGradSquared * inFlow.zw;
-    else if (diff.x < 0) airFlow = pressureGradSquared * outFlow.zw;
-
-    return float4(landFlow, airFlow);
-}
+    void apply(RWTexture3D<float> target, uint2 coord, uint layer)
+    {
+        target[uint3(coord.xy, layer * 3 + 3)] = a;
+        target[uint3(coord.xy, layer * 3 + 4)] = w;
+        target[uint3(coord.xy, layer * 3 + 5)] = t;
+    }
+    
+    float getTempChange(float waterAmount)
+    {
+        // 4487.609886 - 0.00006t^3 + 0.050767t^2 - 16.66404605t
+        float specificLatentHeat = 4487.609886 - t * (16.66404605 - t * (0.050767 - 0.00006 * t));
+        
+        return waterAmount * specificLatentHeat / (a * 1005 + w * 1860);
+    }
+    
+    float getEvaporation(float stillWater)
+    {
+        float waterVolume = min(0.1, stillWater) * cellSizeSquared; // Only the surface of water evaporates (10cm deep)
+        // Clamp evaporation between 0 and all of the water
+        return max(0, min(stillWater, waterVolume * (1 - vp / sp)));
+    }
+    
+    float getRain()
+    {
+        return max(0, min(w, w * (vp / sp - 1)));
+    }
+    
+    float4 outFlow(AirLayer px, AirLayer nx, AirLayer py, AirLayer ny, out float totalOutFlow)
+    {
+        float diffPx = px.p - p;
+        float diffNx = nx.p - p;
+        float diffPy = py.p - p;
+        float diffNy = ny.p - p;
+        
+        totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy));
+        return float4(diffPx, diffNx, diffPy, diffNy);
+    }
+};
 
 
 [numthreads(8, 8, 1)]
@@ -114,73 +239,43 @@ void Simulate (uint3 id : SV_DispatchThreadID)
 {
     uint2 coord = id.xy;
     
-    float3 here = sampleLand(coord);
-    float3 px = sampleLand(wrapPx(coord));
-    float3 nx = sampleLand(wrapNx(coord));
-    float3 py = sampleLand(wrapNy(coord));
-    float3 ny = sampleLand(wrapPy(coord));
+    GroundLayer here = GroundLayer::sample(coord);
+    float creep, erosion, sedimentation, waterFlow, sedimentFlow, stillWater;
+    here.landCalcs(coord, creep, erosion, sedimentation, waterFlow, sedimentFlow, stillWater);
     
-    float2 airHere = sampleAir(coord, 0);
+    float evaporation = 0;
+    float rain = 0;
     
-    float2 diffPx, diffNx, diffPy, diffNy;
-    sampleOutFlow(coord, diffPx, diffNx, diffPy, diffNy);
-    float2 outFlowRate = -abs((min(float2(0, 0), diffPx) + min(float2(0, 0), diffNx) + min(float2(0, 0), diffPy) + min(float2(0, 0), diffNy)));
-    float4 outFlow = float4(outFlowRate.x != 0 ? here.yz / outFlowRate.x : 0, outFlowRate.y != 0 ? airHere / outFlowRate.y : 0);
+    // Air Changes (For now only 1 functional layer)
+    for (uint i = 0; i < airLayers; i++)
+    {
+        AirLayer airHere = AirLayer::sample(coord, i);
+        
+        if (i == 0)
+        {
+            evaporation = airHere.getEvaporation(stillWater);
+        }
+        float condensation = airHere.getRain();
+        rain += condensation;
+        
+        float stateChangeTempChange = airHere.getTempChange(condensation - evaporation);
+        
+        float airFlow = 0; // (pxFlow.z + nxFlow.z + pyFlow.z + nyFlow.z); // Positive -> flow in | Negative -> flow out
+        float humidityFlow = 0; // (pxFlow.w + nxFlow.w + pyFlow.w + nyFlow.w); // Positive -> flow in | Negative -> flow out
     
-    // Split water/sediment between each direction of flow weighted by the amount of flow in those directions
-    float4 pxOutFlow = sampleTotalOutFlow(wrapPx(coord));
-    float4 nxOutFlow = sampleTotalOutFlow(wrapNx(coord));
-    float4 pyOutFlow = sampleTotalOutFlow(wrapPy(coord));
-    float4 nyOutFlow = sampleTotalOutFlow(wrapNy(coord));
+        float da = airFlow;
+        float dw = evaporation - rain + humidityFlow;
+        float dT = stateChangeTempChange;
     
-    float4 pxFlow = getFlow(diffPx, outFlow, pxOutFlow);
-    float4 nxFlow = getFlow(diffNx, outFlow, nxOutFlow);
-    float4 pyFlow = getFlow(diffPy, outFlow, pyOutFlow);
-    float4 nyFlow = getFlow(diffNy, outFlow, nyOutFlow);
-    
-    float flowingWater = min(0, pxFlow.x) + min(0, nxFlow.x) + min(0, pyFlow.x) + min(0, nyFlow.x); // Negative value of amount of water flowing away
-    float stillWater = here.y + flowingWater;
-    
-    float waterFlow    = (pxFlow.x + nxFlow.x + pyFlow.x + nyFlow.x); // Positive -> flow in | Negative -> flow out
-    float sedimentFlow = (pxFlow.y + nxFlow.y + pyFlow.y + nyFlow.y); // Positive -> flow in | Negative -> flow out
-    
-    float waterSurfaceSlope = length(float2(diffPx.x - diffNx.x, diffPy.x - diffNy.x)) / doubleCellSize; // Average gradient across point
-    float streamPower = 0;
-    if(here.y > 0 && waterSurfaceSlope > 0) streamPower = pow(here.y, m) * pow(waterSurfaceSlope, n); // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
-    
-    float landHeightLaplacian = (px.x + nx.x + py.x + ny.x - 4 * here.x) / cellSize;
-    
-    float erosion = e * streamPower;
-    float creep = c * landHeightLaplacian;
-    
-    float sedimentation = streamPower > 0 ? min(s * min(here.z, here.z + sedimentFlow) / streamPower, here.z + sedimentFlow) : min(here.z, here.z + sedimentFlow); // Sediment flow can be negative and so we need to avoid possibly creating sediment out of nothing
-    
-    float humidity = airHere.y / airHere.x;
-    float evaporation = stillWater > 0 ? min(stillWater, (pow(E, -1 / stillWater) + pow(E, -stillWater)) * max(min(1, 1 / humidity), 0)) : 0;
-    float rain = r * airHere.y * max(min(1, humidity), 0);
+        airHere.applyStep(coord, i, da, dw, dT);
+    }
     
     // Land Changes
-    float dlw = rain - evaporation + waterFlow; // Change in water depth with respect to time
-    float dlh = creep - erosion + sedimentation; // Change in bedrock height with respect to time
-    float dll = sedimentFlow + erosion - sedimentation; // Change in transported sediment with respect to time
+    float dh = creep - erosion + sedimentation; // Change in bedrock height with respect to time
+    float dw = (rain - evaporation) / cellSizeSquared + waterFlow; // Change in water depth with respect to time
+    float ds = sedimentFlow + erosion - sedimentation; // Change in transported sediment with respect to time
     
-    float3 newLandState = here + dt * float3(dlh, dlw, dll);
-    
-    float airFlow      = (pxFlow.z + nxFlow.z + pyFlow.z + nyFlow.z); // Positive -> flow in | Negative -> flow out
-    float humidityFlow = (pxFlow.w + nxFlow.w + pyFlow.w + nyFlow.w); // Positive -> flow in | Negative -> flow out
-    
-    // Air Changes
-    float daa = airFlow;
-    float daw = evaporation - rain + humidityFlow;
-    
-    float2 newAirState = dt * float2(daa, daw);
-    
-    result[uint3(coord, 0)] = newLandState.x;
-    result[uint3(coord, 1)] = max(0, newLandState.y); // this max should never actually do anything unless something goes wrong
-    result[uint3(coord, 2)] = max(0, newLandState.z);
-    
-    result[uint3(coord, 3)] = max(0, newAirState.x);
-    result[uint3(coord, 4)] = max(0, newAirState.y);
+    here.applyStep(coord, dh, dw, ds);
 }
 
 
@@ -206,19 +301,31 @@ void Generate(uint3 id : SV_DispatchThreadID)
     float nw = seed.w + bottom + sin(t * 2 * PI) * height / (2 * PI);
     
     float frequency = 1 / noiseScale;
-    float scale = 10;
+    float scale = 3000;
     
     float sum = 0;
-    for (uint i = 0; i < octaves; i++)
+    for (uint octave = 0; octave < octaves; octave++)
     {
         sum += snoise(float4(nx, ny, nz, nw) * frequency) * scale;
         scale *= 0.5;
         frequency *= 2;
     }
     
-    genResult[uint3(id.xy, 0)] = sum;
-    genResult[uint3(id.xy, 1)] = max(0, -sum);
-    genResult[uint3(id.xy, 2)] = 0;
-    genResult[uint3(id.xy, 3)] = (20 - max(0, sum)); // Start with uniform air pressure
-    genResult[uint3(id.xy, 4)] = (20 - max(0, sum)) / 2; // Start with 50 % humidity
+    GroundLayer ground;
+    ground.h = sum;
+    ground.w = max(0, -sum);
+    ground.s = 0;
+    ground.apply(genResult, id.xy);
+    
+    for (uint layer = 0; layer < airLayers; layer++)
+    {
+        float height = (layer == 0) ? 6000 - max(0, sum) : 6000;
+        float volume = height * cellSizeSquared;
+        
+        AirLayer air;
+        air.a = volume * 1.25;
+        air.w = volume / 60000;
+        air.t = 288.15; // Starting temperature at 15 degrees Celsius
+        air.apply(genResult, id.xy, layer);
+    }
 }
