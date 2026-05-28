@@ -10,6 +10,9 @@
 #define WATER_GAS_CONSTANT 461.52 * 1000
 #define AIR_GAS_CONSTANT 287.052874
 
+#define AIR_SPECIFIC_HEAT_CAPACITY 1005
+#define WATER_VAPOUR_SPECIFIC_HEAT_CAPACITY 1860
+
 // Get neighbours and wrap correctly around (Edge vertices are duplicated, and so need to go 1 further when wrapping)
 #define wrapPx(coord) uint2((coord.x + 1) % dim.x, coord.y)
 #define wrapNx(coord) uint2((coord.x - 1) % dim.x, coord.y)
@@ -104,8 +107,8 @@ struct GroundLayer
         float landGradSquared = min(1, diff.x * diff.x / cellSize);
     
         float2 landFlow = float2(0, 0);
-        if (diff.x > 0) landFlow = landGradSquared * inFlow.xy;
-        else if (diff.x < 0) landFlow = landGradSquared * outFlow.xy;
+        if (diff.x > 0)      landFlow = landGradSquared * inFlow;
+        else if (diff.x < 0) landFlow = landGradSquared * outFlow;
 
         return landFlow;
     }
@@ -206,7 +209,7 @@ struct AirLayer
         // 4487.609886 - 0.00006t^3 + 0.050767t^2 - 16.66404605t
         float specificLatentHeat = 4487.609886 - t * (16.66404605 - t * (0.050767 - 0.00006 * t));
         
-        return waterAmount * specificLatentHeat / (a * 1005 + w * 1860);
+        return waterAmount * specificLatentHeat / (a * AIR_SPECIFIC_HEAT_CAPACITY + w * WATER_VAPOUR_SPECIFIC_HEAT_CAPACITY);
     }
     
     float getEvaporation(float stillWater)
@@ -218,18 +221,73 @@ struct AirLayer
     
     float getRain()
     {
-        return max(0, min(w, w * (vp / sp - 1)));
+        return w * max(0, min(1, (vp / sp - 1)));
+    }
+    
+    float3 flow(float flowRate)
+    {
+        return flowRate > 0 ? float3(a, w, t) / flowRate : float3(0, 0, 0);
     }
     
     float4 outFlow(AirLayer px, AirLayer nx, AirLayer py, AirLayer ny, out float totalOutFlow)
     {
-        float diffPx = px.p - p;
-        float diffNx = nx.p - p;
-        float diffPy = py.p - p;
-        float diffNy = ny.p - p;
+        float diffPx = px.p - p + windSpeed.x;
+        float diffNx = nx.p - p - windSpeed.x;
+        float diffPy = py.p - p + windSpeed.y;
+        float diffNy = ny.p - p - windSpeed.y;
         
         totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy));
         return float4(diffPx, diffNx, diffPy, diffNy);
+    }
+    
+    float3 totalOutFlow(uint2 coord, uint layer)
+    {
+        AirLayer px = AirLayer::sample(wrapPx(coord), layer);
+        AirLayer nx = AirLayer::sample(wrapNx(coord), layer);
+        AirLayer py = AirLayer::sample(wrapPy(coord), layer);
+        AirLayer ny = AirLayer::sample(wrapNy(coord), layer);
+
+        float total;
+        outFlow(px, nx, py, ny, total);
+        return flow(total);
+    }
+    
+    static float3 getFlow(float diff, float3 outFlow, float3 inFlow)
+    {
+        float pressureGradSquared = min(1, diff.x * diff.x / cellSize);
+    
+        float3 airFlow = float3(0, 0, 0);
+        if (diff.x > 0)      airFlow = pressureGradSquared * inFlow;
+        else if (diff.x < 0) airFlow = pressureGradSquared * outFlow;
+
+        return airFlow;
+    }
+    
+    void getNetFlow(uint2 coord, uint layer, out float airFlow, out float waterFlow, out float tempFlow)
+    {
+        AirLayer px = AirLayer::sample(wrapPx(coord), layer);
+        AirLayer nx = AirLayer::sample(wrapNx(coord), layer);
+        AirLayer py = AirLayer::sample(wrapPy(coord), layer);
+        AirLayer ny = AirLayer::sample(wrapNy(coord), layer);
+        
+        float outFlowRate;
+        float4 directionalFlow = outFlow(px, nx, py, ny, outFlowRate);
+        float3 outFlow = flow(-outFlowRate);
+    
+        // Split water/sediment between each direction of flow weighted by the amount of flow in those directions
+        float3 pxOutFlow = px.totalOutFlow(wrapPx(coord), layer);
+        float3 nxOutFlow = nx.totalOutFlow(wrapNx(coord), layer);
+        float3 pyOutFlow = py.totalOutFlow(wrapPy(coord), layer);
+        float3 nyOutFlow = ny.totalOutFlow(wrapNy(coord), layer);
+    
+        float3 pxFlow = getFlow(directionalFlow.x, outFlow, pxOutFlow);
+        float3 nxFlow = getFlow(directionalFlow.y, outFlow, nxOutFlow);
+        float3 pyFlow = getFlow(directionalFlow.z, outFlow, pyOutFlow);
+        float3 nyFlow = getFlow(directionalFlow.w, outFlow, nyOutFlow);
+        
+        airFlow = (pxFlow.x + nxFlow.x + pyFlow.x + nyFlow.x); // Positive -> flow in | Negative -> flow out
+        waterFlow = (pxFlow.y + nxFlow.y + pyFlow.y + nyFlow.y); // Positive -> flow in | Negative -> flow out
+        tempFlow = (pxFlow.z + nxFlow.z + pyFlow.z + nyFlow.z); // Positive -> flow in | Negative -> flow out
     }
 };
 
@@ -260,12 +318,12 @@ void Simulate (uint3 id : SV_DispatchThreadID)
         
         float stateChangeTempChange = airHere.getTempChange(condensation - evaporation);
         
-        float airFlow = 0; // (pxFlow.z + nxFlow.z + pyFlow.z + nyFlow.z); // Positive -> flow in | Negative -> flow out
-        float humidityFlow = 0; // (pxFlow.w + nxFlow.w + pyFlow.w + nyFlow.w); // Positive -> flow in | Negative -> flow out
+        float airFlow, waterFlow, tempFlow;
+        airHere.getNetFlow(coord, airLayers, airFlow, waterFlow, tempFlow);
     
         float da = airFlow;
-        float dw = evaporation - rain + humidityFlow;
-        float dT = stateChangeTempChange;
+        float dw = (i == 0 ? evaporation : 0) - condensation + waterFlow;
+        float dT = tempFlow + stateChangeTempChange;
     
         airHere.applyStep(coord, i, da, dw, dT);
     }
