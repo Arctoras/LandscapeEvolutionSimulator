@@ -149,6 +149,7 @@ public class SimulationController : MonoBehaviour
             else air += sums[z];
         }
 
+        // Volume is only guaranteed to be correct while no surface heights reach above 6km (Which should be always, but isn't when numerical errors are occuring)
         float volume = cellSize * cellSize * (6000.0f * total - (sums[0] + sums[1]));
         float vapourPressure = 461520 * temperature * sums[4] / volume;
         float pressure = vapourPressure + temperature * 287.052874f * sums[3] / volume;

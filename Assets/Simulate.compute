@@ -216,7 +216,7 @@ struct AirLayer
     {
         float waterVolume = min(0.1, stillWater) * cellSizeSquared; // Only the surface of water evaporates (10cm deep)
         // Clamp evaporation between 0 and all of the water
-        return max(0, min(stillWater, waterVolume * (1 - vp / sp)));
+        return waterVolume * max(0, min(1, (1 - vp / sp)));
     }
     
     float getRain()

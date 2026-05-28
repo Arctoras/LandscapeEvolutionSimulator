@@ -41,7 +41,7 @@ public class TerrainSimulator
         streamPowerExponent = 0.5f;
         streamPowerExponent2 = 1f;
         sedimentationRate = 5f;
-        simulator.SetFloats("windSpeed", new float[] { 2.5f, 2.5f });
+        simulator.SetFloats("windSpeed", new float[] { 25f, 25f });
     }
 
     public void OnDestroy()
