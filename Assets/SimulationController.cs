@@ -1,10 +1,10 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
-using static UnityEditor.VersionControl.Asset;
 
 public class SimulationController : MonoBehaviour
 {
@@ -29,6 +29,8 @@ public class SimulationController : MonoBehaviour
     int steps = 0;
     int targetSteps = 0;
 
+    public bool debugLogEvals = true;
+    public string outputFile = "";
     public int stepsPerEval = 0;
 
     public bool toggleElevationLines = false;
@@ -49,6 +51,9 @@ public class SimulationController : MonoBehaviour
     // 
     int airLayers = 1;
     int stateVariables { get { return 3 + airLayers * 3; } set { } }
+
+    List<float[]> evalResults = new List<float[]>();
+    List<int> evalSteps = new List<int>();
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -83,6 +88,8 @@ public class SimulationController : MonoBehaviour
             if (targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             genSeed = false;
             steps = 0;
+            evalResults.Clear();
+            evalSteps.Clear();
             Evaluate();
         }
         if (restartSim)
@@ -91,6 +98,8 @@ public class SimulationController : MonoBehaviour
             if(targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             restartSim = false;
             steps = 0;
+            evalResults.Clear();
+            evalSteps.Clear();
             Evaluate();
         }
         if (steps < targetSteps)
@@ -98,12 +107,12 @@ public class SimulationController : MonoBehaviour
             simulator.RunSimulationStep(threadGroups);
             visualiser.GenerateVisTexture(simulator.states, threadGroups);
 
-            if((stepsPerEval > 0 && steps % stepsPerEval == 0) || steps == targetSteps - 1)
+            steps++;
+
+            if((stepsPerEval > 0 && steps % stepsPerEval == 0) || steps == targetSteps)
             {
                 Evaluate();
             }
-
-            steps++;
         }
     }
 
@@ -111,6 +120,28 @@ public class SimulationController : MonoBehaviour
     {
         simulator.OnDestroy();
         visualiser.OnDestroy();
+
+        if(outputFile != "")
+        {
+            StreamWriter results = File.CreateText(outputFile);
+            results.WriteLine("Steps,Bedrock Height,Water Depth,Sediment Amount,Air Amount,Water Vapour Amount,Temperature,Total Earth,Total Water,Total Air,Average Temperature");
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < evalResults.Count; i++)
+            {
+                sb.Append(evalSteps[i]);
+                for (int state = 0; state < stateVariables + 4; state++)
+                {
+                    sb.Append(",");
+                    sb.Append(evalResults[i][state]);
+                }
+                results.WriteLine(sb.ToString());
+                sb.Clear();
+            }
+
+            results.Flush();
+            results.Close();
+        }
     }
 
     public void RestartSimulation()
@@ -120,15 +151,16 @@ public class SimulationController : MonoBehaviour
 
     public void Evaluate()
     {
+        evalSteps.Add(steps);
         AsyncGPUReadback.Request(simulator.states, 0, AsyncEvaluation);
     }
 
     void AsyncEvaluation(AsyncGPUReadbackRequest request)
     {
         float[] sums = new float[stateVariables];
-        for (int z = 0; z < stateVariables; z++)
+        for (int state = 0; state < stateVariables; state++)
         {
-            sums[z] = 0;
+            sums[state] = 0;
         }
 
         float earth = 0;
@@ -137,34 +169,44 @@ public class SimulationController : MonoBehaviour
         float temperature = 0;
         int total = gridDimensions.x * gridDimensions.y;
 
-        for (int z = 0; z < stateVariables; z++)
+        evalResults.Add(new float[stateVariables+4]);
+        for (int state = 0; state < stateVariables; state++)
         {
-            NativeArray<float> states = request.GetData<float>(z);
-            sums[z] = states.Sum();
+            NativeArray<float> states = request.GetData<float>(state);
+            sums[state] = states.Sum();
 
-            if (z == 0 || z == 2) earth += sums[z];
-            else if (z == 1) water += sums[z] * cellSize * cellSize;
-            else if (z % 3 == 1) water += sums[z];
-            else if (z % 3 == 2) temperature += sums[z] / total;
-            else air += sums[z];
+            if (state == 0 || state == 2) earth += sums[state];
+            else if (state == 1) water += sums[state] * cellSize * cellSize;
+            else if (state % 3 == 1) water += sums[state];
+            else if (state % 3 == 2) temperature += sums[state] / total;
+            else air += sums[state];
+            evalResults.Last()[state] = sums[state];
         }
+        evalResults.Last()[stateVariables] = earth;
+        evalResults.Last()[stateVariables + 1] = water;
+        evalResults.Last()[stateVariables + 2] = air;
+        evalResults.Last()[stateVariables + 3] = temperature;
+        
 
-        // Volume is only guaranteed to be correct while no surface heights reach above 6km (Which should be always, but isn't when numerical errors are occuring)
-        float volume = cellSize * cellSize * (6000.0f * total - (sums[0] + sums[1]));
-        float vapourPressure = 461520 * temperature * sums[4] / volume;
-        float pressure = vapourPressure + temperature * 287.052874f * sums[3] / volume;
-        float enhancement = 1.00071f * Mathf.Exp(0.000000045f * pressure);
-        float saturationPressure = enhancement * Mathf.Exp(34.494f - 4924.99f / (temperature - 36.05f)) / Mathf.Pow(temperature - 168.15f, 1.57f);
-        Debug.LogFormat("Pressure: {0} | Vapour Pressure: {1} | Saturation Pressure: {2} | Humidity: {3}", pressure, vapourPressure, saturationPressure, vapourPressure / saturationPressure);
-
-        StringBuilder sb = new StringBuilder();
-        for (int z = 0; z < stateVariables; z++)
+        if (debugLogEvals)
         {
-            if (z != 0) sb.Append(" ");
-            sb.Append(sums[z]);
+            // Volume is only guaranteed to be correct while no surface heights reach above 6km (Which should be always, but isn't when numerical errors are occuring)
+            float volume = cellSize * cellSize * (6000.0f * total - (sums[0] + sums[1]));
+            float vapourPressure = 461520 * temperature * sums[4] / volume;
+            float pressure = vapourPressure + temperature * 287.052874f * sums[3] / volume;
+            float enhancement = 1.00071f * Mathf.Exp(0.000000045f * pressure);
+            float saturationPressure = enhancement * Mathf.Exp(34.494f - 4924.99f / (temperature - 36.05f)) / Mathf.Pow(temperature - 168.15f, 1.57f);
+            Debug.LogFormat("Pressure: {0} | Vapour Pressure: {1} | Saturation Pressure: {2} | Humidity: {3}", pressure, vapourPressure, saturationPressure, vapourPressure / saturationPressure);
+
+            StringBuilder sb = new StringBuilder();
+            for (int state = 0; state < stateVariables; state++)
+            {
+                if (state != 0) sb.Append(" ");
+                sb.Append(sums[state]);
+            }
+            sb.AppendFormat(" | Earth: {0} | Water: {1} | Air: {2} | Temperature (Average): {3}", earth, water, air, temperature);
+            Debug.Log(sb.ToString());
         }
-        sb.AppendFormat(" | Earth: {0} | Water: {1} | Air: {2} | Temperature (Average): {3}", earth, water, air, temperature);
-        Debug.Log(sb.ToString());
     }
 
     public void SetTargetSteps(int newTarget)

@@ -35,13 +35,13 @@ public class TerrainSimulator
         texDescriptor.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
         texDescriptor.enableRandomWrite = true;
         
-        timestepLength = 0.1f;
-        creepSpeed = 0.001f;
-        erosionSpeed = 0.001f;
-        streamPowerExponent = 0.5f;
-        streamPowerExponent2 = 1f;
-        sedimentationRate = 5f;
-        simulator.SetFloats("windSpeed", new float[] { 25f, 25f });
+        timestepLength = 1f;
+        creepSpeed = 0; //0.001f;
+        erosionSpeed = 0; //0.001f;
+        streamPowerExponent = 0; //0.5f;
+        streamPowerExponent2 = 0; //1f;
+        sedimentationRate = 0; //5f;
+        simulator.SetFloats("windSpeed", new float[] { 0, 0 });
     }
 
     public void OnDestroy()
