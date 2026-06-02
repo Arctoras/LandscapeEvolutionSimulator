@@ -123,7 +123,7 @@ public class SimulationController : MonoBehaviour
 
         if(outputFile != "")
         {
-            StreamWriter results = File.CreateText(outputFile);
+            StreamWriter results = File.CreateText("results/" + outputFile + ".csv");
             results.WriteLine("Steps,Bedrock Height,Water Depth,Sediment Amount,Air Amount,Water Vapour Amount,Temperature,Total Earth,Total Water,Total Air,Average Temperature");
 
             StringBuilder sb = new StringBuilder();
