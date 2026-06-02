@@ -135,8 +135,14 @@ struct GroundLayer
         float2 nxFlow = getFlow(directionalFlow.y, outFlow, nxOutFlow);
         float2 pyFlow = getFlow(directionalFlow.z, outFlow, pyOutFlow);
         float2 nyFlow = getFlow(directionalFlow.w, outFlow, nyOutFlow);
+        
+        float2 netFlow = pxFlow + nxFlow + pyFlow + nyFlow; // Positive -> flow in | Negative -> flow out
     
-    
+        stillWater = w - outFlowRate;
+        
+        waterFlow = netFlow.x; 
+        sedimentFlow = netFlow.y;
+        
         float waterSurfaceSlope = length(float2(directionalFlow.x - directionalFlow.y, directionalFlow.z - directionalFlow.w)) / doubleCellSize; // Average gradient across point
         float streamPower = 0;
         if (w > 0 && waterSurfaceSlope > 0)
@@ -144,11 +150,6 @@ struct GroundLayer
     
         float landHeightLaplacian = (px.h + nx.h + py.h + ny.h - 4 * h) / cellSizeSquared;
         
-        stillWater = w - outFlowRate;
-        
-        waterFlow = (pxFlow.x + nxFlow.x + pyFlow.x + nyFlow.x); // Positive -> flow in | Negative -> flow out
-        sedimentFlow = (pxFlow.y + nxFlow.y + pyFlow.y + nyFlow.y); // Positive -> flow in | Negative -> flow out
-    
         erosion = e * streamPower;
         creep = c * landHeightLaplacian;
         
@@ -192,9 +193,9 @@ struct AirLayer
     
     void applyStep(uint2 coord, uint layer, float da, float dw, float dT)
     {
-        result[uint3(coord.xy, layer * 3 + 3)] = max(0, a + dt * da);
-        result[uint3(coord.xy, layer * 3 + 4)] = max(0, w + dt * dw);
-        result[uint3(coord.xy, layer * 3 + 5)] = max(0, t + dt * dT);
+        result[uint3(coord.xy, layer * 3 + 3)] = a + dt * da;
+        result[uint3(coord.xy, layer * 3 + 4)] = w + dt * dw;
+        result[uint3(coord.xy, layer * 3 + 5)] = t + dt * dT;
     }
     
     void apply(RWTexture3D<float> target, uint2 coord, uint layer)
@@ -255,11 +256,11 @@ struct AirLayer
     
     static float3 getFlow(float diff, float3 outFlow, float3 inFlow)
     {
-        float pressureGrad = abs(diff.x / cellSize);
+        float pressureGrad = abs(diff / cellSize);
     
         float3 airFlow = float3(0, 0, 0);
-        if (diff.x > 0)      airFlow = pressureGrad * inFlow;
-        else if (diff.x < 0) airFlow = pressureGrad * outFlow;
+        if (diff > 0)      airFlow = pressureGrad * inFlow;
+        else if (diff < 0) airFlow = pressureGrad * outFlow;
 
         return airFlow;
     }
@@ -286,9 +287,11 @@ struct AirLayer
         float3 pyFlow = getFlow(directionalFlow.z, outFlow, pyOutFlow);
         float3 nyFlow = getFlow(directionalFlow.w, outFlow, nyOutFlow);
         
-        airFlow = (pxFlow.x + nxFlow.x + pyFlow.x + nyFlow.x); // Positive -> flow in | Negative -> flow out
-        waterFlow = (pxFlow.y + nxFlow.y + pyFlow.y + nyFlow.y); // Positive -> flow in | Negative -> flow out
-        tempFlow = (pxFlow.z + nxFlow.z + pyFlow.z + nyFlow.z); // Positive -> flow in | Negative -> flow out
+        float3 netFlow = pxFlow + nxFlow + pyFlow + nyFlow; // Positive -> flow in | Negative -> flow out
+        
+        airFlow = netFlow.x;
+        waterFlow = netFlow.y;
+        tempFlow = netFlow.z;
     }
 };
 
@@ -306,35 +309,35 @@ void Simulate (uint3 id : SV_DispatchThreadID)
     float rain = 0;
     
     // Air Changes (For now only 1 functional layer)
-    for (uint i = 0; i < airLayers; i++)
-    {
-        AirLayer airHere = AirLayer::sample(coord, i);
-        
-        if (i == 0)
-        {
-            evaporation = airHere.getEvaporation(stillWater);
-        }
-        float condensation = airHere.getRain();
-        rain += condensation;
-        
-        float stateChangeTempChange = airHere.getTempChange(condensation - evaporation);
-        
-        float airFlow, waterFlow, tempFlow;
-        airHere.getNetFlow(coord, i, airFlow, waterFlow, tempFlow);
-    
-        float da = airFlow;
-        float dw = (i == 0 ? evaporation : 0) - condensation + waterFlow;
-        float dT = tempFlow + stateChangeTempChange;
-    
-        airHere.applyStep(coord, i, da, dw, dT);
-    }
+    //for (uint i = 0; i < airLayers; i++)
+    //{
+    //    AirLayer airHere = AirLayer::sample(coord, i);
+    //    
+    //    if (i == 0)
+    //    {
+    //        evaporation = airHere.getEvaporation(stillWater);
+    //    }
+    //    float condensation = airHere.getRain();
+    //    rain += condensation;
+    //    
+    //    float stateChangeTempChange = airHere.getTempChange(condensation - evaporation);
+    //    
+    //    float airFlow, waterFlow, tempFlow;
+    //    airHere.getNetFlow(coord, i, airFlow, waterFlow, tempFlow);
+    //
+    //    float da = airFlow;
+    //    float dw = (i == 0 ? evaporation : 0) - condensation + waterFlow;
+    //    float dT = tempFlow + stateChangeTempChange;
+    //
+    //    airHere.applyStep(coord, i, da, dw, dT);
+    //}
     
     // Land Changes
-    //float dh = creep - erosion + sedimentation; // Change in bedrock height with respect to time
-    //float dw = (rain - evaporation) / cellSizeSquared + waterFlow; // Change in water depth with respect to time
-    //float ds = sedimentFlow + erosion - sedimentation; // Change in transported sediment with respect to time
-    //
-    //here.applyStep(coord, dh, dw, ds);
+    float dh = creep - erosion + sedimentation; // Change in bedrock height with respect to time
+    float dw = (rain - evaporation) / cellSizeSquared + waterFlow; // Change in water depth with respect to time
+    float ds = sedimentFlow + erosion - sedimentation; // Change in transported sediment with respect to time
+    
+    here.applyStep(coord, dh, dw, ds);
 }
 
 
@@ -373,18 +376,18 @@ void Generate(uint3 id : SV_DispatchThreadID)
     GroundLayer ground;
     ground.h = 0;
     ground.w = 0;
-    //if (pow(left + id.x,2) + pow(bottom + id.y,2) < 50) ground.w = 100 * width * height;
+    if (pow(left + id.x,2) + pow(bottom + id.y,2) < 50) ground.w = 50 * width * height / PI; // Should be enough water to cover map in ~2500m depth of water
     ground.s = 0;
     ground.apply(genResult, id.xy);
-    AirLayer air;
-    air.a = 1;
-    air.w = 0;
-    air.t = 288.15;
-    if (pow(left + id.x, 2) + pow(bottom + id.y, 2) < 50)
-    {
-        air.a = 1000000 * cellSizeSquared;
-    }
-    air.apply(genResult, id.xy, 0);
+    //AirLayer air;
+    //air.a = 1;
+    //air.w = 0;
+    //air.t = 288.15;
+    //if (pow(left + id.x, 2) + pow(bottom + id.y, 2) < 50)
+    //{
+    //    air.a = 200000000 * cellSizeSquared; // Very roughly enough air for standard air pressure everywhere (would take hundreds of thousands of timesteps for pressure to equalise)
+    //}
+    //air.apply(genResult, id.xy, 0);
     //ground.h = sum;
     //ground.w = max(0, -sum);
     //ground.s = 0;

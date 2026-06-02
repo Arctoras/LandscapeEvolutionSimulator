@@ -31,7 +31,7 @@ public class TerrainSimulator
         if (File.Exists("config/lastSimParams.data")) Load("config/lastSimParams.data");
         else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
 
-        texDescriptor =  new RenderTextureDescriptor(1,1,RenderTextureFormat.RFloat, 0, 0, RenderTextureReadWrite.Linear);
+        texDescriptor = new RenderTextureDescriptor(1,1,RenderTextureFormat.RFloat, 0, 0, RenderTextureReadWrite.Linear);
         texDescriptor.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
         texDescriptor.enableRandomWrite = true;
         
@@ -41,7 +41,7 @@ public class TerrainSimulator
         streamPowerExponent = 0; //0.5f;
         streamPowerExponent2 = 0; //1f;
         sedimentationRate = 0; //5f;
-        simulator.SetFloats("windSpeed", new float[] { 0, 0 });
+        simulator.SetFloats("windSpeed", new float[] { 10, 50 });
     }
 
     public void OnDestroy()

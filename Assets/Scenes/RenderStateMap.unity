@@ -578,7 +578,7 @@ MonoBehaviour:
   visualisationMaterial: {fileID: 2100000, guid: 457b920acec131b43b97dfdb72c3df75, type: 2}
   debugLogEvals: 1
   outputFile: 
-  stepsPerEval: 10
+  stepsPerEval: 0
   toggleElevationLines: 1
   updateThresholds: 1
   colourThresholdsBedrock:

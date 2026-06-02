@@ -55,8 +55,8 @@ void Tex(uint3 id : SV_DispatchThreadID)
     first += bedrockThresholds;
     colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.y)); // Water
     
-    float pressure = min(1, 287.052874 * stateTexture[uint3(id.xy, 5)] * stateTexture[uint3(id.xy, 3)] / (6000 * 25 * 25));
-    colour = float4(min(1, stateTexture[uint3(id.xy, 3)] / 125000000), min(1, stateTexture[uint3(id.xy, 5)] / 288.15), pressure, 1);
+    //float pressure = min(1, 287.052874 * stateTexture[uint3(id.xy, 5)] * stateTexture[uint3(id.xy, 3)] / (6000 * 25 * 25));
+    //colour = float4(min(1, stateTexture[uint3(id.xy, 3)] / 125000000), min(1, stateTexture[uint3(id.xy, 5)] / 288.15), pressure, 1);
     
     colour.a = 1;
     
