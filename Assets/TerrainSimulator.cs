@@ -16,13 +16,14 @@ public class TerrainSimulator
     int generationKernel = -1;
     int simulationKernel = -1;
 
-    private float[] simulationParameters = new float[6];
+    private float[] simulationParameters = new float[7];
     public float creepSpeed { get { return simulationParameters[0]; } set { simulationParameters[0] = value; simulator.SetFloat("c", simulationParameters[0]); } }
     public float erosionSpeed { get { return simulationParameters[1]; } set { simulationParameters[1] = value; simulator.SetFloat("e", simulationParameters[1]); } }
     public float streamPowerExponent { get { return simulationParameters[2]; } set { simulationParameters[2] = value; simulator.SetFloat("m", simulationParameters[2]); } } // water depth multiplier
     public float streamPowerExponent2 { get { return simulationParameters[3]; } set { simulationParameters[3] = value; simulator.SetFloat("n", simulationParameters[3]); } } // slope multiplier
     public float sedimentationRate { get { return simulationParameters[4]; } set { simulationParameters[4] = value; simulator.SetFloat("s", simulationParameters[4]); } }
-    public float timestepLength { get { return simulationParameters[5]; } set { simulationParameters[5] = value; simulator.SetFloat("dt", simulationParameters[5]); } }
+    public float rainRate { get { return simulationParameters[5]; } set { simulationParameters[5] = value; simulator.SetFloat("r", simulationParameters[5]); } } // Value between 0-1
+    public float timestepLength { get { return simulationParameters[6]; } set { simulationParameters[6] = value; simulator.SetFloat("dt", simulationParameters[6]); } }
 
     public TerrainSimulator(ComputeShader simulator)
     {
@@ -32,16 +33,17 @@ public class TerrainSimulator
         else if (File.Exists("config/defaultSimParams.data")) Load("config/defaultSimParams.data");
 
         texDescriptor = new RenderTextureDescriptor(1,1,RenderTextureFormat.RFloat, 0, 0, RenderTextureReadWrite.Linear);
-        texDescriptor.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
+        texDescriptor.dimension = UnityEngine.Rendering.TextureDimension.Tex2DArray;
         texDescriptor.enableRandomWrite = true;
         
-        timestepLength = 1f;
-        creepSpeed = 0; //0.001f;
-        erosionSpeed = 0; //0.001f;
-        streamPowerExponent = 0; //0.5f;
-        streamPowerExponent2 = 0; //1f;
-        sedimentationRate = 0; //5f;
-        simulator.SetFloats("windSpeed", new float[] { 10, 50 });
+        timestepLength = 0.1f;
+        creepSpeed = 0.001f;
+        erosionSpeed = 0.5f;
+        streamPowerExponent = 0.5f;
+        streamPowerExponent2 = 1f;
+        sedimentationRate = 5f;
+        rainRate = 0.3f;
+        simulator.SetFloats("windSpeed", new float[] { 3000, 1000 });
     }
 
     public void OnDestroy()
@@ -137,7 +139,7 @@ public class TerrainSimulator
     public void Load(string filePath)
     {
         byte[] data = File.ReadAllBytes(filePath);
-        float[] values = new float[6];
+        float[] values = new float[7];
         Buffer.BlockCopy(data, 0, values, 0, values.Length);
 
         creepSpeed = values[0];
@@ -145,12 +147,13 @@ public class TerrainSimulator
         streamPowerExponent = values[2];
         streamPowerExponent2 = values[3];
         sedimentationRate = values[4];
-        timestepLength = values[5];
+        rainRate = values[5];
+        timestepLength = values[6];
     }
 
     public void Save(string filePath) 
     {
-        byte[] data = new byte[6 * sizeof(float)];
+        byte[] data = new byte[7 * sizeof(float)];
         Buffer.BlockCopy(simulationParameters,0,data,0, data.Length);
         File.WriteAllBytes(filePath, data);
     }

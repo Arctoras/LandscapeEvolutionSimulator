@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using TMPro;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -15,6 +16,9 @@ public class SimulationController : MonoBehaviour
     [SerializeReference] ComputeShader visualisationShader;
     [SerializeReference] Material visualisationMaterial;
 
+    [SerializeReference] TextMeshProUGUI stepCount;
+    [SerializeReference] TextMeshProUGUI stepCountRate;
+
     Vector2Int gridDimensions;
     Vector3Int threadGroups = new Vector3Int(1, 1, 1);
     private uint octaves;
@@ -27,7 +31,8 @@ public class SimulationController : MonoBehaviour
     bool genSeed = false;
     bool restartSim = false;
     int steps = 0;
-    int targetSteps = 0;
+    int targetSteps = 100000;
+    float startTime = 0;
 
     public bool debugLogEvals = true;
     public string outputFile = "";
@@ -37,6 +42,7 @@ public class SimulationController : MonoBehaviour
     public bool updateThresholds = true;
     public List<ColourThreshold> colourThresholdsBedrock;
     public List<ColourThreshold> colourThresholdsWater;
+    public List<ColourThreshold> colourThresholdsHumidity;
 
     // States:
     // - Land Layer -
@@ -48,12 +54,16 @@ public class SimulationController : MonoBehaviour
     // Air amount
     // Water amount
     // Temperature
+    // Relative Humidity (Not a proper state variable but to avoid recalculating during visualisation)
     // 
     int airLayers = 1;
-    int stateVariables { get { return 3 + airLayers * 3; } set { } }
+    int stateVariables { get { return 3 + airLayers * 4; } set { } }
 
     List<float[]> evalResults = new List<float[]>();
     List<int> evalSteps = new List<int>();
+    List<float> timeTaken = new List<float>();
+    List<float> readTime = new List<float>();
+    List<float> evalTime = new List<float>();
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -61,9 +71,9 @@ public class SimulationController : MonoBehaviour
         visualiser = new TerrainVisualiser(visualisationShader, visualisationMaterial);
         simulator = new TerrainSimulator(simulationShader);
 
-        SetGridDimensions(new Vector2Int(2048, 2048));
-        octaves = 5;
-        cellSize = 25;
+        SetGridDimensions(new Vector2Int(4096, 4096));
+        octaves = 15;
+        cellSize = 5;
         seed = Vector4.zero;
     }
 
@@ -78,28 +88,21 @@ public class SimulationController : MonoBehaviour
         }
         if (updateThresholds)
         {
-            visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsWater);
+            visualiser.SetThresholds(colourThresholdsBedrock, colourThresholdsWater, colourThresholdsHumidity);
             updateThresholds = false;
             if(steps == targetSteps) visualiser.GenerateVisTexture(simulator.states, threadGroups);
         }
-        if (genSeed)
+        if (genSeed || restartSim)
         {
+            genSeed = false;
+            restartSim = false;
+
             simulator.GenerateSeedTexture(octaves, cellSize, seed);
             if (targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
-            genSeed = false;
             steps = 0;
             evalResults.Clear();
             evalSteps.Clear();
-            Evaluate();
-        }
-        if (restartSim)
-        {
-            simulator.GenerateSeedTexture(octaves, cellSize, seed);
-            if(targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
-            restartSim = false;
-            steps = 0;
-            evalResults.Clear();
-            evalSteps.Clear();
+            timeTaken.Clear();
             Evaluate();
         }
         if (steps < targetSteps)
@@ -113,6 +116,12 @@ public class SimulationController : MonoBehaviour
             {
                 Evaluate();
             }
+
+            stepCount.text = steps.ToString();
+            stepCountRate.text = Mathf.RoundToInt(1f / Time.unscaledDeltaTime).ToString() + "/s";
+        } else
+        {
+            stepCountRate.text = "0/s";
         }
     }
 
@@ -124,12 +133,12 @@ public class SimulationController : MonoBehaviour
         if(outputFile != "")
         {
             StreamWriter results = File.CreateText("results/" + outputFile + ".csv");
-            results.WriteLine("Steps,Bedrock Height,Water Depth,Sediment Amount,Air Amount,Water Vapour Amount,Temperature,Total Earth,Total Water,Total Air,Average Temperature");
+            results.WriteLine("Steps,Eval Request Time,Eval Read Time,Eval Duration,Bedrock Height,Water Depth,Sediment Amount,Air Amount,Water Vapour Amount,Temperature,Humidity,Total Earth,Total Water,Total Air,Average Temperature");
 
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < evalResults.Count; i++)
             {
-                sb.Append(evalSteps[i]);
+                sb.Append(evalSteps[i]).Append(",").Append(timeTaken[i]).Append(",").Append(readTime[i]).Append(",").Append(evalTime[i]);
                 for (int state = 0; state < stateVariables + 4; state++)
                 {
                     sb.Append(",");
@@ -152,11 +161,17 @@ public class SimulationController : MonoBehaviour
     public void Evaluate()
     {
         evalSteps.Add(steps);
+        float now = Time.realtimeSinceStartup;
+        if (startTime == 0) startTime = now;
+        timeTaken.Add(now - startTime);
         AsyncGPUReadback.Request(simulator.states, 0, AsyncEvaluation);
     }
 
     void AsyncEvaluation(AsyncGPUReadbackRequest request)
     {
+        float start = Time.realtimeSinceStartup;
+        readTime.Add(start - startTime - timeTaken.Last());
+
         float[] sums = new float[stateVariables];
         for (int state = 0; state < stateVariables; state++)
         {
@@ -177,16 +192,18 @@ public class SimulationController : MonoBehaviour
 
             if (state == 0 || state == 2) earth += sums[state];
             else if (state == 1) water += sums[state] * cellSize * cellSize;
-            else if (state % 3 == 1) water += sums[state];
-            else if (state % 3 == 2) temperature += sums[state] / total;
-            else air += sums[state];
+            else if (state % 4 == 3) air += sums[state];
+            else if (state % 4 == 0) water += sums[state];
+            else if (state % 4 == 1) temperature += sums[state] / total;
             evalResults.Last()[state] = sums[state];
         }
         evalResults.Last()[stateVariables] = earth;
         evalResults.Last()[stateVariables + 1] = water;
         evalResults.Last()[stateVariables + 2] = air;
         evalResults.Last()[stateVariables + 3] = temperature;
-        
+
+        float duration = Time.realtimeSinceStartup - start;
+        evalTime.Add(duration);
 
         if (debugLogEvals)
         {
@@ -204,7 +221,7 @@ public class SimulationController : MonoBehaviour
                 if (state != 0) sb.Append(" ");
                 sb.Append(sums[state]);
             }
-            sb.AppendFormat(" | Earth: {0} | Water: {1} | Air: {2} | Temperature (Average): {3}", earth, water, air, temperature);
+            sb.AppendFormat(" | Earth: {0} | Water: {1} | Air: {2} | Temperature (Average): {3} | Eval Duration: {4}s", earth, water, air, temperature, duration);
             Debug.Log(sb.ToString());
         }
     }

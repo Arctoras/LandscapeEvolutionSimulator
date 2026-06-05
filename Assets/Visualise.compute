@@ -7,10 +7,11 @@ bool elevationLines = true;
 
 int bedrockThresholds;
 int waterThresholds;
+int humidityThresholds;
 StructuredBuffer<float> thresholds;
 StructuredBuffer<float4> colours;
 
-Texture3D<float> stateTexture;
+Texture2DArray<float> stateTexture;
 RWTexture2D<float4> visTexture;
 
 float4 stack(float4 below, float4 above)
@@ -46,17 +47,17 @@ float4 sampleThreshold(int first, int last, float value)
 [numthreads(8, 8, 1)]
 void Tex(uint3 id : SV_DispatchThreadID)
 {
-    float2 states = float2(stateTexture[uint3(id.xy, 0)], stateTexture[uint3(id.xy, 1)]);
     float4 colour = float4(1, 1, 0, 0); // No valid thresholds -> Yellow
     int first = 0;
-    colour = sampleThreshold(first, first + bedrockThresholds - 1, states.x); // Bedrock
-    float distance = fmod(abs(states.x), 250);
+    float bedrockHeight = stateTexture[uint3(id.xy, 0)];
+    colour = sampleThreshold(first, first + bedrockThresholds - 1, bedrockHeight); // Bedrock
+    float distance = fmod(abs(bedrockHeight), 250); // Elevation Lines every 250m
     if(elevationLines && (distance <= 2.5 || distance >= 247.5)) colour = float4(1,1,0.6,1);
     first += bedrockThresholds;
-    colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, states.y)); // Water
+    colour = stack(colour, sampleThreshold(first, first + waterThresholds - 1, stateTexture[uint3(id.xy, 1)])); // Water
+    first += waterThresholds;
+    colour = stack(colour, sampleThreshold(first, first + humidityThresholds - 1, stateTexture[uint3(id.xy, 6)])); // Relative Humidity (Clouds/Rain)
     
-    //float pressure = min(1, 287.052874 * stateTexture[uint3(id.xy, 5)] * stateTexture[uint3(id.xy, 3)] / (6000 * 25 * 25));
-    //colour = float4(min(1, stateTexture[uint3(id.xy, 3)] / 125000000), min(1, stateTexture[uint3(id.xy, 5)] / 288.15), pressure, 1);
     
     colour.a = 1;
     
