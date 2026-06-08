@@ -24,7 +24,7 @@ public class SimulationController : MonoBehaviour
     private uint octaves;
     public uint Octaves { get { return octaves; } set { octaves = value; genSeed = true; } }
     private float cellSize;
-    public float CellSize { get { return cellSize; } set { cellSize = value; genSeed = true; } }
+    public float GridWidth { get { return cellSize * gridDimensions.x / 1000; } set { cellSize = 1000 * value / gridDimensions.x; genSeed = true; } }
     private Vector4 seed;
     public Vector4 Seed { get { return seed; } set { seed = value; genSeed = true; } }
 
@@ -73,7 +73,7 @@ public class SimulationController : MonoBehaviour
 
         SetGridDimensions(new Vector2Int(4096, 4096));
         octaves = 15;
-        cellSize = 5;
+        GridWidth = 10;
         seed = Vector4.zero;
     }
 

@@ -357,7 +357,7 @@ void Simulate (uint3 id : SV_DispatchThreadID)
 
 
 uint octaves;
-float noiseScale;
+float startFrequency;
 
 RWTexture2DArray<float> genResult;
 float width;
@@ -377,7 +377,7 @@ void Generate(uint3 id : SV_DispatchThreadID)
     float nz = seed.z + left + sin(s * 2 * PI) * width / (2 * PI);
     float nw = seed.w + bottom + sin(t * 2 * PI) * height / (2 * PI);
     
-    float frequency = 1 / noiseScale;
+    float frequency = startFrequency;
     float scale = 3000;
     
     float sum = 0;

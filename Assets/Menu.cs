@@ -35,13 +35,13 @@ public class Menu : MonoBehaviour
             }
         }
     }
-    public string cellSize
+    public string gridWidth
     {
         set
         {
-            if (float.TryParse(value, out float cellSizeFloat))
+            if (float.TryParse(value, out float gridWidthFloat))
             {
-                simulation.CellSize = cellSizeFloat;
+                simulation.GridWidth = gridWidthFloat;
             }
         }
     }

@@ -40,10 +40,10 @@ public class TerrainSimulator
         creepSpeed = 0.001f;
         erosionSpeed = 0.5f;
         streamPowerExponent = 0.5f;
-        streamPowerExponent2 = 1f;
+        streamPowerExponent2 = 1.5f;
         sedimentationRate = 5f;
-        rainRate = 0.3f;
-        simulator.SetFloats("windSpeed", new float[] { 3000, 1000 });
+        rainRate = 0.4f;
+        simulator.SetFloats("windSpeed", new float[] { 3000, 0 });
     }
 
     public void OnDestroy()
@@ -62,7 +62,7 @@ public class TerrainSimulator
         simulator.SetFloat("cellSizeSquared", cellSize * cellSize);
 
         simulator.SetInt("octaves", (int)octaves);
-        simulator.SetFloat("noiseScale", 2.5f * Mathf.Max(texA.width,texA.height) / cellSize);
+        simulator.SetFloat("startFrequency", cellSize / (1.220703125f * Mathf.Max(texA.width, texA.height)));
 
         float[] seedValues = { seed.x, seed.y, seed.z, seed.w };
         simulator.SetFloats("seed", seedValues);
