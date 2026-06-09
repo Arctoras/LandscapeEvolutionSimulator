@@ -58,7 +58,6 @@ void Tex(uint3 id : SV_DispatchThreadID)
     first += waterThresholds;
     colour = stack(colour, sampleThreshold(first, first + humidityThresholds - 1, stateTexture[uint3(id.xy, 6)])); // Relative Humidity (Clouds/Rain)
     
-    
     colour.a = 1;
     
     visTexture[id.xy] = colour;

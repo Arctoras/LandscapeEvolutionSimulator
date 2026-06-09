@@ -5,7 +5,6 @@
 #include "Noise.cginc"
 
 #define PI 3.14159265359
-#define E 2.71828182846
 // 1 Water is 1m^3 of liquid water which weighs ~1000kg
 #define WATER_GAS_CONSTANT 461.52 * 1000
 #define AIR_GAS_CONSTANT 287.052874
@@ -31,10 +30,11 @@ RWTexture2DArray<float> result;
 // Simulation Parameters:
 float c;   // creep speed
 float e;   // bedrock erosion speed
-float s;   // sedimentation rate
+float sed;   // sedimentation rate
 float r;   // rain rate
 float m;   // water erosion exponent (water depth multiplier)
 float n;   // water erosion exponent (slope multiplier)
+float d;   // water erosion exponent (water depth decay)
 float dt;  // timestep
 
 float2 windSpeed;
@@ -66,6 +66,8 @@ struct GroundLayer
         target[uint3(coord, 0)] = h;
         target[uint3(coord, 1)] = w;
         target[uint3(coord, 2)] = s;
+        
+        target[uint3(coord, 7)] = 0;
     }
     
     float2 flow(float flowRate, float sedimentation)
@@ -79,20 +81,33 @@ struct GroundLayer
         return h + w;
     }
     
-    float getWaterCentre()
+    float getStreamPower(float4 directionalFlow)
     {
-        // Height of the water's centre of mass
-        return h + w / 2;
+        float waterSurfaceSlope = length(float2(directionalFlow.x - directionalFlow.y, directionalFlow.z - directionalFlow.w)) / doubleCellSize; // Average gradient across point
+        
+        // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
+        if (w <= 0 || waterSurfaceSlope <= 0)
+            return 0;
+        
+        return pow(w, m) * exp(-w / d) * pow(waterSurfaceSlope, n);
+    }
+    
+    float getSedimentation(float streamPower)
+    {
+        if (streamPower > 0)
+            return min(sed * s / streamPower, s);
+        
+        return s;
     }
     
     float4 outFlow(GroundLayer px, GroundLayer nx, GroundLayer py, GroundLayer ny, out float totalOutFlow)
     {
-        float waterCentre = getWaterCentre();
+        float waterCentre = getWaterHeight();
         
-        float diffPx = px.getWaterCentre() - waterCentre;
-        float diffNx = nx.getWaterCentre() - waterCentre;
-        float diffPy = py.getWaterCentre() - waterCentre;
-        float diffNy = ny.getWaterCentre() - waterCentre;
+        float diffPx = px.getWaterHeight() - waterCentre;
+        float diffNx = nx.getWaterHeight() - waterCentre;
+        float diffPy = py.getWaterHeight() - waterCentre;
+        float diffNy = ny.getWaterHeight() - waterCentre;
         
         totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy));
         return float4(diffPx, diffNx, diffPy, diffNy);
@@ -108,12 +123,8 @@ struct GroundLayer
         float total;
         float4 directionalFlow = outFlow(px, nx, py, ny, total);
         
-        float waterSurfaceSlope = length(float2(directionalFlow.x - directionalFlow.y, directionalFlow.z - directionalFlow.w)) / doubleCellSize; // Average gradient across point
-        float streamPower = 0;
-        if (w > 0 && waterSurfaceSlope > 0) // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
-            streamPower = pow(w, m) * pow(waterSurfaceSlope, n);
-        
-        float sedimentation = streamPower > 0 ? min(s * s / streamPower, s) : s;
+        float streamPower = getStreamPower(directionalFlow);
+        float sedimentation = getSedimentation(streamPower);
         
         return flow(total, sedimentation);
     }
@@ -140,13 +151,10 @@ struct GroundLayer
         float outFlowRate;
         float4 directionalFlow = outFlow(px, nx, py, ny, outFlowRate);
     
-        float waterSurfaceSlope = length(float2(directionalFlow.x - directionalFlow.y, directionalFlow.z - directionalFlow.w)) / doubleCellSize; // Average gradient across point
-        float streamPower = 0;
-        if (w > 0 && waterSurfaceSlope > 0) // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
-            streamPower = pow(w, m) * pow(waterSurfaceSlope, n); 
+        float streamPower = getStreamPower(directionalFlow);
         
         // Deposit sediment before flowing it
-        sedimentation = streamPower > 0 ? min(s * s / streamPower, s) : s;
+        sedimentation = getSedimentation(streamPower);
         float2 outFlow = flow(outFlowRate, sedimentation);
         
         // Split water/sediment between each direction of flow weighted by the amount of flow in those directions

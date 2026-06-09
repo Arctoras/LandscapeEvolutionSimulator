@@ -160,6 +160,8 @@ public class SimulationController : MonoBehaviour
 
     public void Evaluate()
     {
+        if (stepsPerEval < 0) return;
+
         evalSteps.Add(steps);
         float now = Time.realtimeSinceStartup;
         if (startTime == 0) startTime = now;

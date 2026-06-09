@@ -4912,7 +4912,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 201698047}
         m_TargetAssemblyTypeName: Menu, Assembly-CSharp
-        m_MethodName: set_cellSize
+        m_MethodName: set_gridWidth
         m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
