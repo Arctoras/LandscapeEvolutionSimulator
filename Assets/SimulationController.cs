@@ -100,6 +100,7 @@ public class SimulationController : MonoBehaviour
             simulator.GenerateSeedTexture(octaves, cellSize, seed);
             if (targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             steps = 0;
+            stepCount.text = steps.ToString();
             evalResults.Clear();
             evalSteps.Clear();
             timeTaken.Clear();

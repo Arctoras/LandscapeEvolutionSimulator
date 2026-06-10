@@ -83,7 +83,7 @@ struct GroundLayer
     
     float getStreamPower(float4 directionalFlow)
     {
-        float waterSurfaceSlope = length(float2(directionalFlow.x - directionalFlow.y, directionalFlow.z - directionalFlow.w)) / doubleCellSize; // Average gradient across point
+        float waterSurfaceSlope = length(float2(directionalFlow.x - directionalFlow.y, directionalFlow.z - directionalFlow.w) / doubleCellSize); // Average gradient across point
         
         // Compiler can handle fixed pow(0,y) but shader can't handle dynamic pow(x,y) where x = 0
         if (w <= 0 || waterSurfaceSlope <= 0)
@@ -102,14 +102,14 @@ struct GroundLayer
     
     float4 outFlow(GroundLayer px, GroundLayer nx, GroundLayer py, GroundLayer ny, out float totalOutFlow)
     {
-        float waterCentre = getWaterHeight();
+        float waterHeight = getWaterHeight();
         
-        float diffPx = px.getWaterHeight() - waterCentre;
-        float diffNx = nx.getWaterHeight() - waterCentre;
-        float diffPy = py.getWaterHeight() - waterCentre;
-        float diffNy = ny.getWaterHeight() - waterCentre;
+        float diffPx = px.getWaterHeight() - waterHeight;
+        float diffNx = nx.getWaterHeight() - waterHeight;
+        float diffPy = py.getWaterHeight() - waterHeight;
+        float diffNy = ny.getWaterHeight() - waterHeight;
         
-        totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy));
+        totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy)) / cellSize;
         return float4(diffPx, diffNx, diffPy, diffNy);
     }
     
@@ -269,7 +269,7 @@ struct AirLayer
         float diffPy = py.p - p + windSpeed.y;
         float diffNy = ny.p - p - windSpeed.y;
         
-        totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy));
+        totalOutFlow = -(min(0, diffPx) + min(0, diffNx) + min(0, diffPy) + min(0, diffNy)) / cellSize;
         return float4(diffPx, diffNx, diffPy, diffNy);
     }
     
@@ -287,7 +287,7 @@ struct AirLayer
     
     static float3 getFlow(float diff, float3 outFlow, float3 inFlow)
     {
-        float pressureGrad = abs(diff / cellSize);
+        float pressureGrad = diff / cellSize;
     
         float3 airFlow = float3(0, 0, 0);
         if (diff > 0)      airFlow = pressureGrad * inFlow;
@@ -305,7 +305,7 @@ struct AirLayer
         
         float outFlowRate;
         float4 directionalFlow = outFlow(px, nx, py, ny, outFlowRate);
-        float3 outFlow = flow(-outFlowRate);
+        float3 outFlow = flow(outFlowRate);
     
         // Split water/sediment between each direction of flow weighted by the amount of flow in those directions
         float3 pxOutFlow = px.totalOutFlow(wrapPx(coord), layer);
