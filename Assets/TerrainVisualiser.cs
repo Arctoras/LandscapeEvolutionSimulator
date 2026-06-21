@@ -7,7 +7,7 @@ public class TerrainVisualiser
     ComputeShader visualiser;
     Material targetMat;
 
-    RenderTexture texVis = null;
+    public RenderTexture texVis = null;
 
     int visualisationTextureKernel = -1;
     ComputeBuffer thresholdBuffer = null;

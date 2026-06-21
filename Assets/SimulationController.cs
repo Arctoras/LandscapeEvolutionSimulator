@@ -168,6 +168,18 @@ public class SimulationController : MonoBehaviour
         if (startTime == 0) startTime = now;
         timeTaken.Add(now - startTime);
         AsyncGPUReadback.Request(simulator.states, 0, AsyncEvaluation);
+
+        //if(steps <= 50000 || steps % 50000 == 0)
+        //{
+        //    Texture2D vis = new Texture2D(gridDimensions.x, gridDimensions.y, TextureFormat.RGBA32, false);
+        //    RenderTexture prev = RenderTexture.active;
+        //    RenderTexture.active = visualiser.texVis;
+        //    vis.ReadPixels(new Rect(0, 0, gridDimensions.x, gridDimensions.y), 0, 0);
+        //    vis.Apply();
+        //    RenderTexture.active = prev;
+        //    byte[] bytes = vis.EncodeToPNG();
+        //    File.WriteAllBytes("results/vis" + steps.ToString() + ".png", bytes);
+        //}
     }
 
     void AsyncEvaluation(AsyncGPUReadbackRequest request)
