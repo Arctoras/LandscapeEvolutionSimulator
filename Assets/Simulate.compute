@@ -39,6 +39,9 @@ float dt;  // timestep
 
 float2 windSpeed;
 
+bool waterColumn;
+bool airColumn;
+
 struct GroundLayer
 {
     float h; // Bedrock Height
@@ -178,6 +181,12 @@ struct GroundLayer
         erosion = e * streamPower;
         creep = c * landHeightLaplacian;
         
+        if (waterColumn || airColumn)
+        {
+            erosion = 0;
+            creep = 0;
+            sedimentation = 0;
+        }
     }
 };
 
@@ -349,6 +358,12 @@ void Simulate (uint3 id : SV_DispatchThreadID)
         
     float evaporation = airHere.calculateEvaporation(waterDepth);
     float rain = airHere.getRain();
+    
+    if (waterColumn || airColumn)
+    {
+        evaporation = 0;
+        rain = 0;
+    }
     result[uint3(coord, 1)] += dt * (rain - evaporation) / cellSizeSquared;
     
     float stateChangeTempChange = airHere.getTempChange(rain - evaporation);
@@ -377,40 +392,67 @@ float4 seed;
 [numthreads(8, 8, 1)]
 void Generate(uint3 id : SV_DispatchThreadID)
 {
-    float s = id.x / float(dim.x);
-    float t = id.y / float(dim.y);
-    
-    float nx = seed.x + left + cos(s * 2 * PI) * width / (2 * PI);
-    float ny = seed.y + bottom + cos(t * 2 * PI) * height / (2 * PI);
-    float nz = seed.z + left + sin(s * 2 * PI) * width / (2 * PI);
-    float nw = seed.w + bottom + sin(t * 2 * PI) * height / (2 * PI);
-    
-    float frequency = startFrequency;
-    float scale = 3000;
-    
-    float sum = 0;
-    for (uint octave = 0; octave < octaves; octave++)
+    if (waterColumn || airColumn)
     {
-        sum += snoise(float4(nx, ny, nz, nw) * frequency) * scale;
-        scale *= 0.5;
-        frequency *= 2;
-    }
-    
-    GroundLayer ground;
-    ground.h = sum;
-    ground.w = max(0, -sum);
-    ground.s = 0;
-    ground.apply(genResult, id.xy);
-    
-    for (uint layer = 0; layer < airLayers; layer++)
-    {
-        float height = (layer == 0) ? 6000 - max(0, sum) : 6000;
-        float volume = height * cellSizeSquared;
+        GroundLayer ground;
+        ground.h = 0;
+        ground.w = 0;
+        ground.s = 0;
         
         AirLayer air;
-        air.a = volume * 1.25;
-        air.w = volume / 10000;
-        air.t = 288.15; // Starting temperature at 15 degrees Celsius
-        air.apply(genResult, id.xy, layer);
+        air.a = 1;
+        air.w = 0;
+        air.t = 288.15;
+        
+        if (waterColumn)
+        {
+            if (pow(id.x + left, 2) + pow(id.y + bottom, 2) < 50) ground.w = 50 * width * height / PI; // Depth of 2500 everywhere if no water is lost or gained
+        }
+        else
+        {
+            if (pow(id.x + left, 2) + pow(id.y + bottom, 2) < 50) air.a = 600 * cellSizeSquared * width * height / PI; // Roughly 4x standard air pressure everywhere if no air is lost or gained
+        }
+        
+        ground.apply(genResult, id.xy);
+        air.apply(genResult, id.xy, 0);
+    }
+    else
+    {
+        float s = id.x / width;
+        float t = id.y / height;
+    
+        float nx = seed.x + left + cos(s * 2 * PI) * width / (2 * PI);
+        float ny = seed.y + bottom + cos(t * 2 * PI) * height / (2 * PI);
+        float nz = seed.z + left + sin(s * 2 * PI) * width / (2 * PI);
+        float nw = seed.w + bottom + sin(t * 2 * PI) * height / (2 * PI);
+    
+        float frequency = startFrequency;
+        float scale = 3000;
+    
+        float sum = 0;
+        for (uint octave = 0; octave < octaves; octave++)
+        {
+            sum += snoise(float4(nx, ny, nz, nw) * frequency) * scale;
+            scale *= 0.5;
+            frequency *= 2;
+        }
+        
+        GroundLayer ground;
+        ground.h = sum;
+        ground.w = max(0, -sum);
+        ground.s = 0;
+        ground.apply(genResult, id.xy);
+    
+        for (uint layer = 0; layer < airLayers; layer++)
+        {
+            float height = (layer == 0) ? 6000 - max(0, sum) : 6000;
+            float volume = height * cellSizeSquared;
+        
+            AirLayer air;
+            air.a = volume * 1.25;
+            air.w = volume / 10000;
+            air.t = 288.15; // Starting temperature at 15 degrees Celsius
+            air.apply(genResult, id.xy, layer);
+        }
     }
 }

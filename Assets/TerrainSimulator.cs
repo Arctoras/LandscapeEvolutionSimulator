@@ -49,7 +49,7 @@ public class TerrainSimulator
         if(texB) texB.Release();
     }
 
-    public void GenerateSeedTexture(uint octaves, float cellSize, Vector4 seed)
+    public void GenerateSeedTexture(uint octaves, float cellSize, Vector4 seed, bool waterColumn, bool airColumn)
     {
         simulator.SetFloat("cellSize", cellSize);
         simulator.SetFloat("doubleCellSize", cellSize * 2);
@@ -60,6 +60,9 @@ public class TerrainSimulator
 
         float[] seedValues = { seed.x, seed.y, seed.z, seed.w };
         simulator.SetFloats("seed", seedValues);
+
+        simulator.SetBool("waterColumn", waterColumn);
+        simulator.SetBool("airColumn", airColumn);
 
         if (generationKernel == -1)
         {

@@ -97,6 +97,11 @@ public class TerrainVisualiser
         visualiser.SetBool("elevationLines", elevationLines);
     }
 
+    public void SetShowAirAsWater(bool showAirAsWater)
+    {
+        visualiser.SetBool("airAsWater", showAirAsWater);
+    }
+
     public void GenerateVisTexture(Texture states, Vector3Int threadGroups)
     {
         if (visualisationTextureKernel == -1)

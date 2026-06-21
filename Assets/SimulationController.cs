@@ -76,7 +76,7 @@ public class SimulationController : MonoBehaviour
         visualiser = new TerrainVisualiser(visualisationShader, visualisationMaterial);
         simulator = new TerrainSimulator(simulationShader, windVelocity);
 
-        SetGridDimensions(new Vector2Int(2048, 2048));
+        SetGridDimensions(new Vector2Int(1024, 1024));
         octaves = 15;
         GridWidth = 10;
         seed = Vector4.zero;
@@ -102,7 +102,8 @@ public class SimulationController : MonoBehaviour
             genSeed = false;
             restartSim = false;
 
-            simulator.GenerateSeedTexture(octaves, 1000 * gridWidth / gridDimensions.x, seed);
+            simulator.GenerateSeedTexture(octaves, 1000 * gridWidth / gridDimensions.x, seed, waterColumnDemo, airColumnDemo);
+            visualiser.SetShowAirAsWater(airColumnDemo && !waterColumnDemo);
             if (targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             steps = 0;
             stepCount.text = steps.ToString();
