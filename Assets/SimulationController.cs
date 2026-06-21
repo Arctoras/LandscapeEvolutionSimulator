@@ -6,6 +6,7 @@ using TMPro;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
+using static UnityEngine.Rendering.DebugUI;
 
 public class SimulationController : MonoBehaviour
 {
@@ -23,15 +24,15 @@ public class SimulationController : MonoBehaviour
     Vector3Int threadGroups = new Vector3Int(1, 1, 1);
     private uint octaves;
     public uint Octaves { get { return octaves; } set { octaves = value; genSeed = true; } }
-    private float cellSize;
-    public float GridWidth { get { return cellSize * gridDimensions.x / 1000; } set { cellSize = 1000 * value / gridDimensions.x; genSeed = true; } }
+    private float gridWidth;
+    public float GridWidth { get { return gridWidth; } set { gridWidth = value; genSeed = true; } }
     private Vector4 seed;
     public Vector4 Seed { get { return seed; } set { seed = value; genSeed = true; } }
 
     bool genSeed = false;
     bool restartSim = false;
     int steps = 0;
-    int targetSteps = 100000;
+    int targetSteps = 50000;
     float startTime = 0;
 
     public bool debugLogEvals = true;
@@ -65,13 +66,17 @@ public class SimulationController : MonoBehaviour
     List<float> readTime = new List<float>();
     List<float> evalTime = new List<float>();
 
+    public bool waterColumnDemo = false;
+    public bool airColumnDemo = false;
+    public Vector2 windVelocity = Vector2.zero;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         visualiser = new TerrainVisualiser(visualisationShader, visualisationMaterial);
-        simulator = new TerrainSimulator(simulationShader);
+        simulator = new TerrainSimulator(simulationShader, windVelocity);
 
-        SetGridDimensions(new Vector2Int(4096, 4096));
+        SetGridDimensions(new Vector2Int(2048, 2048));
         octaves = 15;
         GridWidth = 10;
         seed = Vector4.zero;
@@ -97,7 +102,7 @@ public class SimulationController : MonoBehaviour
             genSeed = false;
             restartSim = false;
 
-            simulator.GenerateSeedTexture(octaves, cellSize, seed);
+            simulator.GenerateSeedTexture(octaves, 1000 * gridWidth / gridDimensions.x, seed);
             if (targetSteps == 0) visualiser.GenerateVisTexture(simulator.states, threadGroups);
             steps = 0;
             stepCount.text = steps.ToString();
@@ -187,6 +192,8 @@ public class SimulationController : MonoBehaviour
         float start = Time.realtimeSinceStartup;
         readTime.Add(start - startTime - timeTaken.Last());
 
+        float cellArea = Mathf.Pow(1000 * gridWidth / gridDimensions.x, 2);
+
         float[] sums = new float[stateVariables];
         for (int state = 0; state < stateVariables; state++)
         {
@@ -206,7 +213,7 @@ public class SimulationController : MonoBehaviour
             sums[state] = states.Sum();
 
             if (state == 0 || state == 2) earth += sums[state];
-            else if (state == 1) water += sums[state] * cellSize * cellSize;
+            else if (state == 1) water += sums[state] * cellArea;
             else if (state % 4 == 3) air += sums[state];
             else if (state % 4 == 0) water += sums[state];
             else if (state % 4 == 1) temperature += sums[state] / total;
@@ -223,7 +230,7 @@ public class SimulationController : MonoBehaviour
         if (debugLogEvals)
         {
             // Volume is only guaranteed to be correct while no surface heights reach above 6km (Which should be always, but isn't when numerical errors are occuring)
-            float volume = cellSize * cellSize * (6000.0f * total - (sums[0] + sums[1]));
+            float volume = cellArea * (6000.0f * total - (sums[0] + sums[1]));
             float vapourPressure = 461520 * temperature * sums[4] / volume;
             float pressure = vapourPressure + temperature * 287.052874f * sums[3] / volume;
             float enhancement = 1.00071f * Mathf.Exp(0.000000045f * pressure);

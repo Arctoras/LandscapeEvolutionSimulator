@@ -24,7 +24,7 @@ public class TerrainSimulator
     public float rainRate { get { return simulationParameters[6]; } set { simulationParameters[6] = value; simulator.SetFloat("r", simulationParameters[6]); } } // Value between 0-1
     public float timestepLength { get { return simulationParameters[7]; } set { simulationParameters[7] = value; simulator.SetFloat("dt", simulationParameters[7]); } }
 
-    public TerrainSimulator(ComputeShader simulator)
+    public TerrainSimulator(ComputeShader simulator, Vector2 windVelocity)
     {
         this.simulator = simulator;
 
@@ -40,7 +40,7 @@ public class TerrainSimulator
         streamPowerExponent3 = 1000;
         sedimentationRate = 5f;
         rainRate = 0.4f;
-        simulator.SetFloats("windSpeed", new float[] { 3000, 0 });
+        simulator.SetFloats("windSpeed", new float[] { windVelocity.x, windVelocity.y });
     }
 
     public void OnDestroy()
@@ -56,7 +56,7 @@ public class TerrainSimulator
         simulator.SetFloat("cellSizeSquared", cellSize * cellSize);
 
         simulator.SetInt("octaves", (int)octaves);
-        simulator.SetFloat("startFrequency", cellSize / (1.220703125f * Mathf.Max(texA.width, texA.height)));
+        simulator.SetFloat("startFrequency", cellSize / 5000);
 
         float[] seedValues = { seed.x, seed.y, seed.z, seed.w };
         simulator.SetFloats("seed", seedValues);
