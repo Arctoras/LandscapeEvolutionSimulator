@@ -61,7 +61,14 @@ void Tex(uint3 id : SV_DispatchThreadID)
     if (!airAsWater)
     {
         first += waterThresholds;
-        colour = stack(colour, sampleThreshold(first, first + humidityThresholds - 1, stateTexture[uint3(id.xy, 6)])); // Relative Humidity (Clouds/Rain)
+        float humidity = stateTexture[uint3(id.xy, 6)];
+        if (humidity == 0 || humidity > 0 || humidity < 0) // Not NaN
+        {
+            if (isinf(humidity))
+                humidity = 10000000; // Much bigger than it should ever be, but not actually showing as infinity error colour
+            colour = stack(colour, sampleThreshold(first, first + humidityThresholds - 1, humidity)); // Relative Humidity (Clouds/Rain)
+        }
+        
     }
     
     colour.a = 1;
